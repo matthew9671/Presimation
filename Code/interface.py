@@ -3,7 +3,7 @@ from tkinter import *
 
 import string
 
-DO_NOTHING = lambda: print(42)
+DO_NOTHING = lambda: 42
 
 # From course notes
 def rgbString(red, green, blue):
@@ -22,13 +22,18 @@ class Rect(object):
     def get_pos(self):
         return (self.x1,self.y1)
 
-    def resize(self, x1, y1, x2, y2):
+    def resize(self, x1, y1, x2 = None, y2 = None):
         self.x1 = x1
-        self.x2 = x2
         self.y1 = y1
-        self.y2 = y2
-        self.width = x2 - x1
-        self.height = y2 - y1
+        if x2 != None and y2 != None:
+            self.x2 = x2
+            self.y2 = y2
+            self.width = x2 - x1
+            self.height = y2 - y1
+        else:
+            assert(x2 == None and y2 == None)
+            self.x2 = x1 + self.width
+            self.y2 = y1 + self.height
 
     def in_borders(self, x, y):
         x1, y1 = self.get_pos()
@@ -47,12 +52,9 @@ class Rect(object):
         return (self.get_pos()[0] + self.width / 2, 
                 self.get_pos()[1] + self.height / 2)
 
-    def draw(self,canvas,mask = None):
+    def draw(self,canvas):
         x1, y1 = self.get_pos()
         x2, y2 = x1 + self.width, y1 + self.height
-        if mask != None:
-            x1, y1 = mask.constrain_in_borders(x1, y1)
-            x2, y2 = mask.constrain_in_borders(x2, y2)
         canvas.create_rectangle(x1, y1, x2, y2,
             fill = self.color, width = self.border,activefill = self.activeFill)
 
@@ -92,10 +94,10 @@ class psm_GUI_object(Rect):
     def update(self):
         pass
 
-    def draw(self, canvas, mask = None, activeFill = "white"):
-        super().draw(canvas, mask)
+    def draw(self, canvas, activeFill = "white"):
+        super().draw(canvas)
         for child in self.children:
-            child.draw(canvas, mask)
+            child.draw(canvas)
 
     def on_mouse_down(self, x, y):
         for child in self.children:
@@ -181,11 +183,84 @@ class psm_button(psm_GUI_object):
             if self.timer > psm_button.DOUBLE_CLICK_INTERVAL:
                 self.single_clicked = False
 
-    def draw(self, canvas, mask = None):
-        super().draw(canvas,mask)
+    def draw(self, canvas):
+        self.super().draw(canvas)
         x, y = self.get_center()
         if self.image != None:
             canvas.create_image(x, y, image = self.image)
+
+class psm_toolbar_btn_small(psm_button):
+
+    BUTTON_SIZE = 20
+    
+    def __init__(self, x, y, tool_name,
+                 orientation = "left", toggle = False,
+                 color = "white", enabled = True,
+                 border = 1, parent = WORLD, 
+                 alt_text = "Button", activeFill = "orange",
+                 click_func = DO_NOTHING, double_click_func = DO_NOTHING,
+                 image = None):
+        x1, y1 = x, y
+        x2, y2 = x + psm_toolbar_btn_small.BUTTON_SIZE,
+                 y + psm_toolbar_btn_small.BUTTON_SIZE
+        super().__init__(x1, y1, x2, y2, color, border, parent, activeFill)
+        # Should be all-caps
+        self.tool_name = tool_name
+        # Minor detail: determines which side of the screen the button is on
+        # ["left", "right"]
+        self.orientation = orientation
+        # Determines if the button is an on/off button
+        self.toggle = toggle
+
+    def on_click(self):
+        # The click_func should be something like select_tool(tool_name)
+        if toggle:
+            self.chosen = not self.chosen
+        else:
+            self.chosen = True
+        self.click_func(self.tool_name)
+
+# Large buttons represents groups of tools that have a similar function
+class psm_toolbar_btn_large(psm_button):
+
+    BUTTON_SIZE = 80
+
+    def __init__(self, x, y, toolset_name, orientation = "left",
+                 color = "white", enabled = True,
+                 border = 4, parent = WORLD, 
+                 alt_text = "Button", activeFill = "white",
+                 click_func = DO_NOTHING, double_click_func = DO_NOTHING,
+                 image = None):
+        x1, y1 = x, y
+        x2, y2 = x + psm_toolbar_btn_large.BUTTON_SIZE,
+                 y + psm_toolbar_btn_large.BUTTON_SIZE
+        super().__init__(x1, y1, x2, y2, color, border, parent, activeFill)
+        self.primary_tool = None
+        self.sub_tools = []
+
+    def on_click(self):
+        if self.primary_tool == None:
+            raise Exception("No primary tool added!")
+        self.primary_tool.on_click()
+
+    def add_sub_tool(self, tool_btn):
+        if not isinstance(tool_btn, psm_toolbar_btn_small):
+            raise Exception(""Subtool should be an instance of 
+                psm_toolbar_btn_small"")
+        self.add_child(tool_btn)
+
+        # Reposition the newly added small button
+        y = psm_toolbar_btn_small.BUTTON_SIZE * len(self.sub_tools)
+        if orientation == "left":
+            x = psm_toolbar_btn_large.BUTTON_SIZE
+        else:
+            assert(orientation == "right")
+            x = -psm_toolbar_btn_small.BUTTON_SIZE
+        self.tool_btn.resize(x, y)
+        # Add the button to sub_tools
+        self.sub_tools.append(tool_btn)
+        #@assert(len(self.subtools) > 0)
+        self.primary_tool = self.sub_tools[0]
 
 # The menu that pops when an object is selected
 class psm_menu(psm_panel):
