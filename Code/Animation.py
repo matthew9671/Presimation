@@ -14,7 +14,7 @@ class Animation(object):
     def redrawAll(self): pass
     
     # Call app.run(width,height) to get your app started
-    def run(self, width=800, height=600):
+    def run(self, width = 800, height = 600):
         # create the root and the canvas
         root = Tk()
         root.title("Evolution")
