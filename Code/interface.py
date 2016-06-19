@@ -184,7 +184,7 @@ class psm_button(psm_GUI_object):
                 self.single_clicked = False
 
     def draw(self, canvas):
-        self.super().draw(canvas)
+        super().draw(canvas)
         x, y = self.get_center()
         if self.image != None:
             canvas.create_image(x, y, image = self.image)
@@ -201,8 +201,8 @@ class psm_toolbar_btn_small(psm_button):
                  click_func = DO_NOTHING, double_click_func = DO_NOTHING,
                  image = None):
         x1, y1 = x, y
-        x2, y2 = x + psm_toolbar_btn_small.BUTTON_SIZE,
-                 y + psm_toolbar_btn_small.BUTTON_SIZE
+        x2, y2 = x + psm_toolbar_btn_small.BUTTON_SIZE,\
+        y + psm_toolbar_btn_small.BUTTON_SIZE
         super().__init__(x1, y1, x2, y2, color, border, parent, activeFill)
         # Should be all-caps
         self.tool_name = tool_name
@@ -232,8 +232,8 @@ class psm_toolbar_btn_large(psm_button):
                  click_func = DO_NOTHING, double_click_func = DO_NOTHING,
                  image = None):
         x1, y1 = x, y
-        x2, y2 = x + psm_toolbar_btn_large.BUTTON_SIZE,
-                 y + psm_toolbar_btn_large.BUTTON_SIZE
+        x2, y2 = x + psm_toolbar_btn_large.BUTTON_SIZE,\
+        y + psm_toolbar_btn_large.BUTTON_SIZE
         super().__init__(x1, y1, x2, y2, color, border, parent, activeFill)
         self.primary_tool = None
         self.sub_tools = []
@@ -245,8 +245,8 @@ class psm_toolbar_btn_large(psm_button):
 
     def add_sub_tool(self, tool_btn):
         if not isinstance(tool_btn, psm_toolbar_btn_small):
-            raise Exception(""Subtool should be an instance of 
-                psm_toolbar_btn_small"")
+            raise Exception("Subtool should be an instance of\
+                psm_toolbar_btn_small")
         self.add_child(tool_btn)
 
         # Reposition the newly added small button
@@ -263,6 +263,26 @@ class psm_toolbar_btn_large(psm_button):
         self.primary_tool = self.sub_tools[0]
 
 # The menu that pops when an object is selected
-class psm_menu(psm_panel):
+#class psm_menu(psm_panel):
+    #def __init__(self):
+        #pass
+
+class Test(Animation):
     def __init__(self):
-        pass
+        self.buttons=[]
+        self.buttons.append(psm_button(20,20,100,100,"red"))
+        self.run()
+
+    def redrawAll(self):
+        for i in range(len(self.buttons)):
+            self.buttons[i].draw(self.canvas)
+
+    def mouseMotion(self,event):pass
+
+    def mousePressed(self,event):pass
+
+    def keyPressed(self,event):pass
+
+    def leftMouseReleased(self,event):pass
+
+t = Test()
