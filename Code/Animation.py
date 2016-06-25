@@ -2,7 +2,7 @@ from tkinter import *
 
 class Animation(object):
 
-    DELAY = 20
+    DELAY = 10
     # Override these methods when creating your own animation
     def mousePressed(self, event): pass
     def keyPressed(self, event): pass
@@ -17,7 +17,7 @@ class Animation(object):
     def run(self, width = 800, height = 600):
         # create the root and the canvas
         root = Tk()
-        root.title("Evolution")
+        root.title("Presimation Demo")
         m1 = PanedWindow()
         m1.pack(fill=BOTH, expand = 1)
         self.width = width
