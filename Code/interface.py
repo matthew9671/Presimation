@@ -22,6 +22,9 @@ class Rect(object):
     def get_pos(self):
         return (self.x1,self.y1)
 
+    # This is very handy
+    # Since it can also reposition objects
+    # when you leave the last 2 fields empty
     def resize(self, x1, y1, x2 = None, y2 = None):
         self.x1 = x1
         self.y1 = y1
@@ -203,7 +206,11 @@ class psm_toolbar_btn_small(psm_button):
         x1, y1 = x, y
         x2, y2 = x + psm_toolbar_btn_small.BUTTON_SIZE,\
         y + psm_toolbar_btn_small.BUTTON_SIZE
-        super().__init__(x1, y1, x2, y2, color, border, parent, activeFill)
+        super().__init__(x1, y1, x2, y2, color, enabled,
+                 border, parent, 
+                 alt_text, activeFill,
+                 click_func, double_click_func,
+                 image)
         # Should be all-caps
         self.tool_name = tool_name
         # Minor detail: determines which side of the screen the button is on
@@ -234,7 +241,11 @@ class psm_toolbar_btn_large(psm_button):
         x1, y1 = x, y
         x2, y2 = x + psm_toolbar_btn_large.BUTTON_SIZE,\
         y + psm_toolbar_btn_large.BUTTON_SIZE
-        super().__init__(x1, y1, x2, y2, color, border, parent, activeFill)
+        super().__init__(x1, y1, x2, y2, color, enabled,
+                 border, parent, 
+                 alt_text, activeFill,
+                 click_func, double_click_func,
+                 image)
         self.primary_tool = None
         self.sub_tools = []
 
@@ -245,8 +256,8 @@ class psm_toolbar_btn_large(psm_button):
 
     def add_sub_tool(self, tool_btn):
         if not isinstance(tool_btn, psm_toolbar_btn_small):
-            raise Exception("Subtool should be an instance of\
-                psm_toolbar_btn_small")
+            raise Exception(
+                "Subtool should be an instance of psm_toolbar_btn_small")
         self.add_child(tool_btn)
 
         # Reposition the newly added small button
@@ -261,6 +272,8 @@ class psm_toolbar_btn_large(psm_button):
         self.sub_tools.append(tool_btn)
         #@assert(len(self.subtools) > 0)
         self.primary_tool = self.sub_tools[0]
+
+class psm_menu_icon(psm_button):pass
 
 # The menu that pops when an object is selected
 #class psm_menu(psm_panel):
