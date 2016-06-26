@@ -59,7 +59,7 @@ class Rect(object):
         x1, y1 = self.get_pos()
         x2, y2 = x1 + self.width, y1 + self.height
         canvas.create_rectangle(x1, y1, x2, y2,
-            fill = self.color, width = self.border,activefill = self.activeFill)
+            fill = self.color, activefill = self.activeFill)
 
 WORLD = Rect(0,0,0,0)
 
@@ -161,19 +161,21 @@ class psm_button(psm_GUI_object):
         self.double_click_func()
 
     def on_mouse_down(self, x, y):
-        self.active = True
+        if self.in_borders(x, y):
+            self.active = True
 
     def on_mouse_up(self, x, y):
         if self.active:
             self.active = False
-            if not self.single_clicked:
-                self.on_click()
-                self.single_clicked = True
-            else:
-                # Notice that the second click in a double click
-                # does not trigger on_click() again
-                self.on_double_click()
-                self.single_clicked = False
+            if self.in_borders(x, y):
+                if not self.single_clicked:
+                    self.on_click()
+                    self.single_clicked = True
+                else:
+                    # Notice that the second click in a double click
+                    # does not trigger on_click() again
+                    self.on_double_click()
+                    self.single_clicked = False
 
     def set_mouse_on(self, value):
         super().set_mouse_on(value)
@@ -194,7 +196,7 @@ class psm_button(psm_GUI_object):
 
 class psm_toolbar_btn_small(psm_button):
 
-    BUTTON_SIZE = 20
+    BUTTON_SIZE = 25
     
     def __init__(self, x, y, tool_name,
                  orientation = "left", toggle = False,
@@ -218,19 +220,21 @@ class psm_toolbar_btn_small(psm_button):
         self.orientation = orientation
         # Determines if the button is an on/off button
         self.toggle = toggle
+        assert(isinstance(parent,psm_toolbar_btn_large))
+        parent.add_sub_tool(self)
 
     def on_click(self):
         # The click_func should be something like select_tool(tool_name)
-        if toggle:
+        if self.toggle:
             self.chosen = not self.chosen
         else:
             self.chosen = True
-        self.click_func(self.tool_name)
+        self.click_func()
 
 # Large buttons represents groups of tools that have a similar function
 class psm_toolbar_btn_large(psm_button):
 
-    BUTTON_SIZE = 80
+    BUTTON_SIZE = 100
 
     def __init__(self, x, y, toolset_name, orientation = "left",
                  color = "white", enabled = True,
@@ -246,6 +250,7 @@ class psm_toolbar_btn_large(psm_button):
                  alt_text, activeFill,
                  click_func, double_click_func,
                  image)
+        self.orientation = orientation
         self.primary_tool = None
         self.sub_tools = []
 
@@ -262,23 +267,19 @@ class psm_toolbar_btn_large(psm_button):
 
         # Reposition the newly added small button
         y = psm_toolbar_btn_small.BUTTON_SIZE * len(self.sub_tools)
-        if orientation == "left":
+        if self.orientation == "left":
             x = psm_toolbar_btn_large.BUTTON_SIZE
         else:
-            assert(orientation == "right")
+            assert(self.orientation == "right")
             x = -psm_toolbar_btn_small.BUTTON_SIZE
-        self.tool_btn.resize(x, y)
+        tool_btn.resize(x, y)
         # Add the button to sub_tools
         self.sub_tools.append(tool_btn)
         #@assert(len(self.subtools) > 0)
         self.primary_tool = self.sub_tools[0]
 
+# TODO: Write this
 class psm_menu_icon(psm_button):pass
-
-# The menu that pops when an object is selected
-#class psm_menu(psm_panel):
-    #def __init__(self):
-        #pass
 
 class Test(Animation):
     def __init__(self):
@@ -297,5 +298,3 @@ class Test(Animation):
     def keyPressed(self,event):pass
 
     def leftMouseReleased(self,event):pass
-
-t = Test()

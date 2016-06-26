@@ -21,9 +21,13 @@ def global_to_workspace(x, y = None):
         x = x[0]
     return (x - WORKSPACE_ORIGIN_X, WORKSPACE_ORIGIN_Y - y)
 
+# colors
+lightGrey = rgbString(200,200,200)
+offWhite = rgbString(250, 250, 235)
+
 # This class stores information about fields of an object
 # including how it is presented in the menu
-class psm_field(Object):
+class psm_field(object):
 
     ICON_SIZE = 32
     MARGIN = 10
@@ -106,7 +110,7 @@ class psm_menu(psm_GUI_object):
             # An invisible panel to hold all the buttons
             panel = psm_GUI_object(0,0,0,0)
             for row in range(len(self.tabs[tab])):
-                for col in range(len(self.tabs[tab][row]))
+                for col in range(len(self.tabs[tab][row])):
                     item = self.tabs[tab][row][col]
                     x1, y1 = get_item_topleft_position(row, col)
                     button = psm_menu_icon(x1,
@@ -162,7 +166,7 @@ class psm_menu(psm_GUI_object):
         # TODO: Add input fields!
 
 
-class psm_object(Object):
+class psm_object(object):
     def __init__(self, name, index):
         # A list of all the field names
         # Which are keys to the attributes dictionary
@@ -268,7 +272,7 @@ class psm_circle(psm_object):
         y2 = starty - center_y + radius
         canvas.create_oval(x1, y1, x2, y2)
 
-class psm_tool(Object):
+class psm_tool(object):
 
     # The minimum size (width and height) that an object can have
     MIN_ELEM_SIZE = 10
@@ -325,8 +329,7 @@ class psm_circle_tool(psm_tool):
         r = (dx ** 2 + dy ** 2) ** 0.5
         self.current_object.set_value("RADIUS", r)
 
-
-class slide(Object):
+class slide(object):
     def __init__(self):
         self.objects = []
 
@@ -341,9 +344,16 @@ class slide(Object):
                 user_object.draw(canvas, startx, starty)
 
 class Presimation(Animation):
-    def __init__(self):
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+
         # The list of GUI objects including the toolbar and the timeline
         self.GUI_objects = []
+
+        # The index of the current slide
+        self.current_slide = 0
+
         self.init_GUI()
 
         # We might not need this -- we can just let objects draw their own menus
@@ -353,43 +363,199 @@ class Presimation(Animation):
         # The list of slides created
         self.slides = []
 
-        # The index of the current slide
-        self.current_slide = 0
-
         # TODO: Add a list of tools
         self.current_tool = None
 
         # "EDIT" "PLAYBACK"
         self.mode = "EDIT"
+        self.run(width, height)
 
     def init_GUI(self):
         # TODO: Add values to these parameters
+        # independent ratio and size
+        self.wkspace_w_ratio = 0.6  # width of the workspace
+        self.tmline_h_ratio = 0.25  # height of the timeline
+        self.tmline_margin_w = 5
+        self.tmline_margin_h = 5
+
+        # users can always see 1/4 of the rest snapshots
+        self.tmline_uncover_ratio = 0.25
+
+        self.init_size()
+        self.create_outline()
+        self.init_tools()
+        self.create_timeline()
+
         self.canvas_start_x = None
         self.canvas_start_y = None
 
+    def init_size(self):
+        # dependent ratio
+        self.toolbar_w_ratio = (1 - self.wkspace_w_ratio) / 2
+        self.toolbar_h_ratio = self.wkspace_h_ratio = 1 - self.tmline_h_ratio
+        self.tmline_w_ratio = 1
+
+        # size
+        self.toolbar_w = self.width * self.toolbar_w_ratio
+        self.toolbar_h = self.height * self.toolbar_h_ratio
+
+        self.tmline_w = self.width * self.tmline_w_ratio
+        self.tmline_h = self.height * self.tmline_h_ratio
+
+        self.wkspace_w = self.width * self.wkspace_w_ratio
+        self.wkspace_h = self.height * self.wkspace_h_ratio
+
+        # fixed width to height ratio
+        self.wkspace_w_to_h = self.wkspace_w / self.wkspace_h
+
+    def create_outline(self):
+        # create workspace
+        workspace = psm_GUI_object(self.toolbar_w, 0,
+          self.toolbar_w+self.wkspace_w, self.wkspace_h, offWhite)
+        self.GUI_objects.append(workspace)
+
+        # create toolbars
+        left_toolbar = psm_GUI_object(0, 0, 
+            self.toolbar_w, self.toolbar_h,lightGrey)
+        right_toolbar = psm_GUI_object(self.toolbar_w + self.wkspace_w, 0,
+            self.width, self.toolbar_h, lightGrey)
+        self.GUI_objects.extend([left_toolbar, right_toolbar])
+
+        # create timeline
+        timeline = psm_GUI_object(0, self.toolbar_h,
+            self.width, self.height, lightGrey)
+        self.GUI_objects.append(timeline)
+
+    def init_tools(self):
+        self.tool_sets = ["shapes", "lines", "texts"]  # large buttons
+        # TODO: Change this variable name
+        self.num = len(self.tool_sets)
+        self.tools = dict()  # small buttons
+        self.tools["shapes"] = ["circle", "rectangle", "star", "custom"]
+        self.tools["lines"] = ["lines", "curves"]
+        self.tools["texts"] = ["fonts", "bold", "highlight"]
+
+        # determine the top_left corner of the tools
+        top = (self.toolbar_h / self.num - psm_toolbar_btn_large.BUTTON_SIZE)/2
+        left = (self.toolbar_w - psm_toolbar_btn_large.BUTTON_SIZE
+            - psm_toolbar_btn_small.BUTTON_SIZE)/2
+
+        for i in range(self.num):
+
+            # top_left corner of the first small button
+            small_btn_start_x = left + psm_toolbar_btn_large.BUTTON_SIZE
+            small_btn_start_y = top + self.toolbar_h * i / self.num
+            toolset_name = self.tool_sets[i]
+            toolset = psm_toolbar_btn_large(left,small_btn_start_y,toolset_name,
+                 "left", "blue", True, 4, self.GUI_objects[1])  # toolbar      
+
+            for tool_name in self.tools[toolset_name]:
+                tool = psm_toolbar_btn_small(0,
+                    0, tool_name, "left", False, "red", True,
+                    1, toolset, "Button", "orange",
+                    lambda : self.select_tool(tool_name))
+                small_btn_start_y += psm_toolbar_btn_small.BUTTON_SIZE
+
+            self.GUI_objects[1].add_child(toolset)
+
+    def create_timeline(self):
+        # camera button
+        self.GUI_objects.append(psm_button(self.toolbar_w + self.wkspace_w,
+            self.toolbar_h, self.width, self.height, "blue"))
+
+        # TODO: max limit??
+        self.snapshots = []
+
+        snapshot_h = self.tmline_h - self.tmline_margin_h * 2
+        snapshot_w = snapshot_h * self.wkspace_w_to_h
+        self.snapshot_uncover_w = snapshot_w * self.tmline_uncover_ratio
+
+        # set initial position of the snapshots
+        self.start_x = self.toolbar_w + self.tmline_margin_w
+        self.end_x = self.toolbar_w + self.wkspace_w\
+            - self.tmline_margin_w - snapshot_w
+        self.start_y = self.toolbar_h + self.tmline_margin_h
+
+        # TODO: Create another class for this
+        # create initial snapshots (5 as an example)
+        for i in range(5):
+            self.snapshots.append(psm_button(
+                self.start_x + i * self.snapshot_uncover_w, self.start_y,
+                self.start_x + i * self.snapshot_uncover_w + snapshot_w,
+                self.start_y + snapshot_h, offWhite))
+        self.update_snapshots()  
+
+    # adjust the positions of the snapshots according to current_slide
+    def update_snapshots(self):
+        # left stack
+        y1 = self.start_y
+        for i in range(self.current_slide + 1):
+            x1 = self.start_x + self.snapshot_uncover_w * i
+            self.snapshots[i].resize(x1, y1)
+
+        # right stack
+        x1 = self.end_x
+        for i in range(len(self.snapshots)-1, self.current_slide, -1):
+            self.snapshots[i].resize(x1, y1)
+            x1 = x1 - self.snapshot_uncover_w
+
+    def select_tool(self, tool_name):
+        # substitute it with real functions
+        print("Click ", tool_name)
+        self.current_tool = tool_name
+
     def mousePressed(self, event):
-        for GUI_object in GUI_objects:
-            GUI_object.mouse_down(event.x, event.y)
+        for GUI_object in self.GUI_objects:
+            GUI_object.on_mouse_down(event.x, event.y)
         if self.mode == "EDIT":
             # Process the mouse down event for user objects
-            for user_object in self.current_slide.slides:
+            for user_object in self.slides[self.current_slide]:
                 pressed = user_object.mouse_down(event.x, event.y)
                 if pressed:
                     # Only one object can be pressed
                     break
 
+    def leftMouseReleased(self,event):
+        for GUI_object in self.GUI_objects:
+            GUI_object.on_mouse_up(event.x, event.y)
+
     def keyPressed(self, event): pass
     def keyReleased(self,event):pass
-    def leftMouseReleased(self,event):pass
-    def mouseMotion(self,event):pass
-    def timerFired(self): pass
+    def mouseMotion(self,event):
+        # check if the mouse hovers on the snapshots
+        # left stack
+        for i in range(self.current_slide, -1, -1):
+            if self.snapshots[i].in_borders(event.x, event.y):
+                self.current_slide = i
+                return
+
+        # right stack
+        for i in range(len(self.snapshots)-1, self.current_slide, -1):
+            if self.snapshots[i].in_borders(event.x, event.y):
+                self.current_slide = i
+                return
+
+    def timerFired(self):
+        self.update_snapshots()
+
     def redrawAll(self):
         # Draw GUI
         for GUI_object in self.GUI_objects:
             GUI_object.draw(self.canvas)
 
+        # Draw snapshots
+        # right stack
+        for i in range(self.current_slide+1, len(self.snapshots)):
+            self.snapshots[i].draw(self.canvas)
+
+        # left stack
+        for i in range(self.current_slide+1):
+            self.snapshots[i].draw(self.canvas)
+
         # Draw workspace
-        self.slides[self.current_slide].render(
-            self.canvas,
-            self.canvas_start_x,
-            self.canvas_start_y)
+        # self.slides[self.current_slide].render(
+        #     self.canvas,
+        #     self.canvas_start_x,
+        #     self.canvas_start_y)
+
+psm = Presimation(900, 600)
