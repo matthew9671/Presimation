@@ -11,12 +11,12 @@ def rgbString(red, green, blue):
 
 class Rect(object):
     def __init__(self, x1, y1, x2, y2, color = "white", border = 0,
-        activeFill = None):
+        active_fill = None):
         self.resize(x1, y1, x2, y2)
         self.color = color
         self.border = border
-        if activeFill == None: self.activeFill = color
-        else: self.activeFill = activeFill
+        if active_fill == None: self.active_fill = color
+        else: self.active_fill = active_fill
 
     # get the position of the top-left corner
     def get_pos(self):
@@ -59,7 +59,7 @@ class Rect(object):
         x1, y1 = self.get_pos()
         x2, y2 = x1 + self.width, y1 + self.height
         canvas.create_rectangle(x1, y1, x2, y2,
-            fill = self.color, activefill = self.activeFill)
+            fill = self.color, activefill = self.active_fill)
 
 WORLD = Rect(0,0,0,0)
 
@@ -72,8 +72,8 @@ WORLD = Rect(0,0,0,0)
 # Too get its position relative to the world, use get_pos()
 class psm_GUI_object(Rect):
     def __init__(self, x1, y1, x2, y2, 
-            color = "white", border = 0, parent = WORLD,activeFill = None):
-        super().__init__(x1,y1,x2,y2,color,border,activeFill)
+            color = "white", border = 0, parent = WORLD,active_fill = None):
+        super().__init__(x1,y1,x2,y2,color,border,active_fill)
         self.parent = parent
         self.is_visible = True
         self.is_enabled = True
@@ -95,9 +95,10 @@ class psm_GUI_object(Rect):
 
     # Some objects (like buttons) require this to keep track of time
     def update(self):
-        pass
+        for child in self.children:
+            child.update()
 
-    def draw(self, canvas, activeFill = "white"):
+    def draw(self, canvas, active_fill = "white"):
         super().draw(canvas)
         for child in self.children:
             child.draw(canvas)
@@ -125,14 +126,14 @@ class psm_GUI_object(Rect):
 # The most general button object
 class psm_button(psm_GUI_object):
 
-    DOUBLE_CLICK_INTERVAL = 5
+    DOUBLE_CLICK_INTERVAL = 10
 
     def __init__(self, x1, y1, x2, y2, color = "white", enabled = True,
                  border = 0, parent = WORLD, 
-                 alt_text = "Button", activeFill = "white",
+                 alt_text = "Button", active_fill = "white",
                  click_func = DO_NOTHING, double_click_func = DO_NOTHING,
                  image = None):
-        super().__init__(x1,y1,x2,y2,color,border,parent,activeFill)
+        super().__init__(x1,y1,x2,y2,color,border,parent,active_fill)
 
         # Button states
 
@@ -161,10 +162,12 @@ class psm_button(psm_GUI_object):
         self.double_click_func()
 
     def on_mouse_down(self, x, y):
+        super().on_mouse_down(x, y)
         if self.in_borders(x, y):
             self.active = True
 
     def on_mouse_up(self, x, y):
+        super().on_mouse_up(x, y)
         if self.active:
             self.active = False
             if self.in_borders(x, y):
@@ -183,10 +186,14 @@ class psm_button(psm_GUI_object):
         if not value: self.active = False
 
     def update(self):
+        super().update()
         if self.single_clicked:
             self.timer += 1
             if self.timer > psm_button.DOUBLE_CLICK_INTERVAL:
+                # Debug only
+                print("Just a single click")
                 self.single_clicked = False
+                self.timer = 0
 
     def draw(self, canvas):
         super().draw(canvas)
@@ -198,11 +205,10 @@ class psm_toolbar_btn_small(psm_button):
 
     BUTTON_SIZE = 25
     
-    def __init__(self, x, y, tool_name,
-                 orientation = "left", toggle = False,
+    def __init__(self, x, y, tool_name, toggle = False,
                  color = "white", enabled = True,
                  border = 1, parent = WORLD, 
-                 alt_text = "Button", activeFill = "orange",
+                 alt_text = "Button", active_fill = "orange",
                  click_func = DO_NOTHING, double_click_func = DO_NOTHING,
                  image = None):
         x1, y1 = x, y
@@ -210,14 +216,12 @@ class psm_toolbar_btn_small(psm_button):
         y + psm_toolbar_btn_small.BUTTON_SIZE
         super().__init__(x1, y1, x2, y2, color, enabled,
                  border, parent, 
-                 alt_text, activeFill,
+                 alt_text, active_fill,
                  click_func, double_click_func,
                  image)
         # Should be all-caps
         self.tool_name = tool_name
-        # Minor detail: determines which side of the screen the button is on
-        # ["left", "right"]
-        self.orientation = orientation
+
         # Determines if the button is an on/off button
         self.toggle = toggle
         assert(isinstance(parent,psm_toolbar_btn_large))
@@ -239,7 +243,7 @@ class psm_toolbar_btn_large(psm_button):
     def __init__(self, x, y, toolset_name, orientation = "left",
                  color = "white", enabled = True,
                  border = 4, parent = WORLD, 
-                 alt_text = "Button", activeFill = "white",
+                 alt_text = "Button", active_fill = "white",
                  click_func = DO_NOTHING, double_click_func = DO_NOTHING,
                  image = None):
         x1, y1 = x, y
@@ -247,9 +251,10 @@ class psm_toolbar_btn_large(psm_button):
         y + psm_toolbar_btn_large.BUTTON_SIZE
         super().__init__(x1, y1, x2, y2, color, enabled,
                  border, parent, 
-                 alt_text, activeFill,
+                 alt_text, active_fill,
                  click_func, double_click_func,
                  image)
+        # Determines which side of the screen the button is on
         self.orientation = orientation
         self.primary_tool = None
         self.sub_tools = []

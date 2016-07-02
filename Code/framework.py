@@ -2,6 +2,7 @@ from Animation import *
 from interface import *
 import copy
 
+# TODO: Put layout parameters here
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 
@@ -24,6 +25,8 @@ def global_to_workspace(x, y = None):
 # colors
 lightGrey = rgbString(200,200,200)
 offWhite = rgbString(250, 250, 235)
+
+def double_click_debug(): print("Registered double click!")
 
 # This class stores information about fields of an object
 # including how it is presented in the menu
@@ -68,7 +71,7 @@ class psm_field(object):
     def set_value(self, value):
         self.value = value
 
-    def get_value(self, value):
+    def get_value(self):
         return self.value
 
     def set_icon(self, icon):
@@ -184,8 +187,11 @@ class psm_object(object):
         # We'll generate the corresponding menu in the specific classes
         self.menu = None
 
-        self.set_value("NAME", name)
-        self.set_value("INDEX", index)
+        # TODO: These can be further specified
+        name_field = psm_field(name)
+        index_field = psm_field(index)
+        self.attributes["NAME"] = name_field
+        self.attributes["INDEX"] = index_field
 
     def set_value(self, field, value):
         if field not in self.fields:
@@ -216,16 +222,17 @@ does not belong to object!""")
     def set_selected(self, value):
         self.is_selected = value
 
-    # TODO: Change the draw function so that we can pass in the ratio
-    # for drawing miniture slides
-    def draw(self, canvas, startx, starty):
-        if self.menu_on and self.menu != None:
+    # Pass in the ratio for drawing miniture slides
+    def draw(self, canvas, startx, starty, ratio = 1):
+        # We don't want to display the menu in the thumbnail
+        if self.menu_on and self.menu != None and ratio == 1:
             self.menu.draw(canvas, startx, starty)
 
     def get_hashables(self):
         return (self.name, self.index)
 
     def __eq__(self, other):
+        if other == None: return False
         if not isinstance(other, psm_object):
             raise Exception("""Comparing an instance of psm_object
 with another object""")
@@ -260,16 +267,17 @@ class psm_circle(psm_object):
         return ((x - center_x) ** 2 + (y - center_y) ** 2 
                <= (radius + border / 2) ** 2)
 
-    def draw(self, canvas, startx, starty):
+    def draw(self, canvas, startx, starty, ratio = 1):
+        super().draw(canvas, startx, starty, ratio)
         center_x = self.get_value("CENTER_X")
         center_y = self.get_value("CENTER_Y")
         radius = self.get_value("RADIUS")
-        x1 = startx + center_x - radius
-        x2 = startx + center_x + radius
+        x1 = startx + (center_x - radius) * ratio
+        x2 = startx + (center_x + radius) * ratio
         # Note the the +y direction on the canvas is up
         # Because it is convinient for a coordinate system 
-        y1 = starty - center_y - radius
-        y2 = starty - center_y + radius
+        y1 = starty - (center_y + radius) * ratio
+        y2 = starty - (center_y - radius) * ratio
         canvas.create_oval(x1, y1, x2, y2)
 
 class psm_tool(object):
@@ -277,12 +285,14 @@ class psm_tool(object):
     # The minimum size (width and height) that an object can have
     MIN_ELEM_SIZE = 10
 
-    def __init__(self):
+    def __init__(self, tool_name, object_name):
         # True when the mouse is pressed
         self.mouse_pressed = False
         self.current_object = None
         # A tuple (x, y) of position coordinates
         self.drag_start = None
+        self.tool_name = tool_name
+        self.object_name = object_name
 
     def mouse_down(self, x, y, object_name):
         if not self.mouse_pressed:
@@ -292,31 +302,46 @@ class psm_tool(object):
 
     def mouse_up(self, x, y):
         self.mouse_pressed = False
-        return self.current_object
+        # Pass the "ownership" of the object being generated
+        # from itself to the main loop
+        current_object = self.current_object
+        self.current_object = None
+        return current_object
 
     def mouse_move(self, x, y):
         if self.mouse_pressed:
             width = x - self.drag_start[0]
             height = y - self.drag_start[1]
-            width = max(width, psm_tool.MIN_ELEM_SIZE)
-            height = max(height, psm_tool.MIN_ELEM_SIZE)
+            if width >= 0:
+                width = max(width, psm_tool.MIN_ELEM_SIZE)
+            else:
+                width = min(width, -psm_tool.MIN_ELEM_SIZE)
+            if height >= 0: 
+                height = max(height, psm_tool.MIN_ELEM_SIZE)
+            else:
+                height = min(height, -psm_tool.MIN_ELEM_SIZE)
             self.resize_object(width, height)
 
-    def generate_object(self):
+    def generate_object(self, object_name):
         pass
 
     def resize_object(self, width, height):
         pass
 
     def draw_object(self, canvas):
-        self.current_object.draw(canvas)
+        if self.current_object != None:
+            self.current_object.draw(canvas, WORKSPACE_ORIGIN_X, 
+                                             WORKSPACE_ORIGIN_Y)
+
+    def get_object_name(self):
+        return self.object_name
 
 class psm_circle_tool(psm_tool):
 
     MIN_RADIUS = 5
 
     def __init__(self):
-        super().__init__()
+        super().__init__(tool_name = "Circle tool", object_name = "Circle")
 
     def generate_object(self, object_name):
         x, y = global_to_workspace(self.drag_start)
@@ -336,42 +361,75 @@ class slide(object):
     def add_object(self, user_object):
         self.objects.append(user_object)
 
+    # Returns an object name that is unique in the slide
+    # TODO: Write this
+    def generate_object_name(self, name):
+        return name
+
     # Render is specific to slides
     # Has a more professional feel
-    def render(self, canvas, startx, starty, edit = True):
+    def render(self, canvas, startx, starty, edit = True, display_ratio = 1):
+
         for user_object in self.objects:
             if edit or user_object.is_visible:
-                user_object.draw(canvas, startx, starty)
+                user_object.draw(canvas, startx, starty, display_ratio)
 
 class Presimation(Animation):
+
+    # Defining the toolsets and tools here improves clarity
+    # Every item should be a tuple of name(key) and instance of a class
+
+    # TODO: This is only temporary
+    TOOLS = [["Objects",
+                [("CIRCLE", psm_circle_tool())]
+             ],
+             ["Drawing",
+                []
+             ],
+             ["Animation", 
+                []
+             ]
+            ]
+
     def __init__(self, width, height):
         self.width = width
         self.height = height
 
-        # The list of GUI objects including the toolbar and the timeline
+        # The list of top level GUI objects 
+        # including the toolbar, workspace and the timeline
+        # TODO: This should be changed since the name is too general
         self.GUI_objects = []
 
-        # The index of the current slide
+        # (int) The index of the current slide
+        # TODO: This needs to be changed since an edited slide is a new slide
         self.current_slide = 0
-
-        self.init_GUI()
 
         # We might not need this -- we can just let objects draw their own menus
         # The list of menus currently opened
         self.menus = []
         
         # The list of slides created
-        self.slides = []
+        self.slides = [slide()]
 
-        # TODO: Add a list of tools
+        self.tools = self.get_tool_dict()
+        # (psm_tool)
         self.current_tool = None
 
         # "EDIT" "PLAYBACK"
         self.mode = "EDIT"
+
+        self.init_GUI()
+
         self.run(width, height)
 
+    def get_tool_dict(self):
+        tool_dict = dict()
+        for toolset in Presimation.TOOLS:
+            tool_dict.update(toolset[1])
+        return tool_dict
+
     def init_GUI(self):
-        # TODO: Add values to these parameters
+        # TODO: Move these to the top level for convenience
         # independent ratio and size
         self.wkspace_w_ratio = 0.6  # width of the workspace
         self.tmline_h_ratio = 0.25  # height of the timeline
@@ -411,7 +469,7 @@ class Presimation(Animation):
     def create_outline(self):
         # create workspace
         workspace = psm_GUI_object(self.toolbar_w, 0,
-          self.toolbar_w+self.wkspace_w, self.wkspace_h, offWhite)
+          self.toolbar_w + self.wkspace_w, self.wkspace_h, offWhite)
         self.GUI_objects.append(workspace)
 
         # create toolbars
@@ -427,33 +485,45 @@ class Presimation(Animation):
         self.GUI_objects.append(timeline)
 
     def init_tools(self):
-        self.tool_sets = ["shapes", "lines", "texts"]  # large buttons
-        # TODO: Change this variable name
-        self.num = len(self.tool_sets)
-        self.tools = dict()  # small buttons
-        self.tools["shapes"] = ["circle", "rectangle", "star", "custom"]
-        self.tools["lines"] = ["lines", "curves"]
-        self.tools["texts"] = ["fonts", "bold", "highlight"]
+        toolbar = self.GUI_objects[1] # Clarity
+        toolset_count = len(Presimation.TOOLS)
 
         # determine the top_left corner of the tools
-        top = (self.toolbar_h / self.num - psm_toolbar_btn_large.BUTTON_SIZE)/2
+        top = (self.toolbar_h / toolset_count 
+            - psm_toolbar_btn_large.BUTTON_SIZE) / 2
         left = (self.toolbar_w - psm_toolbar_btn_large.BUTTON_SIZE
-            - psm_toolbar_btn_small.BUTTON_SIZE)/2
+            - psm_toolbar_btn_small.BUTTON_SIZE) / 2
 
-        for i in range(self.num):
-
+        for i in range(toolset_count):
             # top_left corner of the first small button
             small_btn_start_x = left + psm_toolbar_btn_large.BUTTON_SIZE
-            small_btn_start_y = top + self.toolbar_h * i / self.num
-            toolset_name = self.tool_sets[i]
-            toolset = psm_toolbar_btn_large(left,small_btn_start_y,toolset_name,
-                 "left", "blue", True, 4, self.GUI_objects[1])  # toolbar      
+            small_btn_start_y = top + self.toolbar_h * i / toolset_count
+            toolset_name = Presimation.TOOLS[i][0]
+            toolset = psm_toolbar_btn_large(
+                left,
+                small_btn_start_y,
+                toolset_name,
+                alt_text = toolset_name,
+                orientation = "left",
+                color = "blue", 
+                parent = toolbar)  # Clarity      
 
-            for tool_name in self.tools[toolset_name]:
-                tool = psm_toolbar_btn_small(0,
-                    0, tool_name, "left", False, "red", True,
-                    1, toolset, "Button", "orange",
-                    lambda : self.select_tool(tool_name))
+            for sub_tool in Presimation.TOOLS[i][1]:
+                tool_name = sub_tool[0]
+                tool = sub_tool[1]
+
+                tool_btn = psm_toolbar_btn_small(
+                    0,
+                    0, 
+                    tool_name, 
+                    color = "red",
+                    parent = toolset,
+                    alt_text = tool.tool_name, # A little different
+                                          # Maybe I should clarify this later...
+                    active_fill = "orange",
+                    click_func = lambda : self.select_tool(tool_name),
+                    double_click_func = double_click_debug)
+
                 small_btn_start_y += psm_toolbar_btn_small.BUTTON_SIZE
 
             self.GUI_objects[1].add_child(toolset)
@@ -502,43 +572,61 @@ class Presimation(Animation):
     def select_tool(self, tool_name):
         # substitute it with real functions
         print("Click ", tool_name)
-        self.current_tool = tool_name
+        self.current_tool = self.tools[tool_name]
 
-    def mousePressed(self, event):
+    def mouse_down(self, event):
         for GUI_object in self.GUI_objects:
             GUI_object.on_mouse_down(event.x, event.y)
         if self.mode == "EDIT":
             # Process the mouse down event for user objects
-            for user_object in self.slides[self.current_slide]:
-                pressed = user_object.mouse_down(event.x, event.y)
-                if pressed:
-                    # Only one object can be pressed
-                    break
+            # for user_object in self.slides[self.current_slide]:
+            #     pressed = user_object.mouse_down(event.x, event.y)
+            #     if pressed:
+            #         # Only one object can be pressed
+            #         break
+            if self.current_tool != None:
+                object_name = self.current_tool.get_object_name()
+                object_name = self.slides[
+                    self.current_slide
+                    ].generate_object_name(object_name)
+                self.current_tool.mouse_down(event.x, event.y, object_name)
 
-    def leftMouseReleased(self,event):
+    def mouse_up(self, event):
         for GUI_object in self.GUI_objects:
             GUI_object.on_mouse_up(event.x, event.y)
+        if self.current_tool != None:
+            new_object = self.current_tool.mouse_up(event.x, event.y)
+            if new_object != None:
+                self.slides[self.current_slide].add_object(new_object)
 
     def keyPressed(self, event): pass
-    def keyReleased(self,event):pass
-    def mouseMotion(self,event):
+    def keyReleased(self,event): pass
+
+    def mouse_move(self,event):
+        if self.current_tool != None:
+                self.current_tool.mouse_move(event.x, event.y)
+
         # check if the mouse hovers on the snapshots
         # left stack
         for i in range(self.current_slide, -1, -1):
             if self.snapshots[i].in_borders(event.x, event.y):
-                self.current_slide = i
+                # Actually you have to click to change slides
+                # TODO: Change this
+                #self.current_slide = i
                 return
 
         # right stack
         for i in range(len(self.snapshots)-1, self.current_slide, -1):
             if self.snapshots[i].in_borders(event.x, event.y):
-                self.current_slide = i
+                #self.current_slide = i
                 return
 
-    def timerFired(self):
+    def timer_fired(self):
         self.update_snapshots()
+        # Update all the buttons
+        self.GUI_objects[1].update()
 
-    def redrawAll(self):
+    def redraw_all(self):
         # Draw GUI
         for GUI_object in self.GUI_objects:
             GUI_object.draw(self.canvas)
@@ -553,9 +641,11 @@ class Presimation(Animation):
             self.snapshots[i].draw(self.canvas)
 
         # Draw workspace
-        # self.slides[self.current_slide].render(
-        #     self.canvas,
-        #     self.canvas_start_x,
-        #     self.canvas_start_y)
+        self.slides[self.current_slide].render(
+             self.canvas,
+             WORKSPACE_ORIGIN_X,
+             WORKSPACE_ORIGIN_Y)
+        if self.current_tool != None:
+            self.current_tool.draw_object(self.canvas)
 
 psm = Presimation(900, 600)
