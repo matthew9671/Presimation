@@ -21,6 +21,7 @@ class Animation(object):
     def run(self, width = 800, height = 600):
         # create the root and the canvas
         root = Tk()
+        self.root = root
         root.title("Presimation(Demo)")
         m1 = PanedWindow()
         m1.pack(fill=BOTH, expand = 1)

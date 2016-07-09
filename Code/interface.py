@@ -59,7 +59,8 @@ class Rect(object):
         x1, y1 = self.get_pos()
         x2, y2 = x1 + self.width, y1 + self.height
         canvas.create_rectangle(x1, y1, x2, y2,
-            fill = self.color, activefill = self.active_fill)
+            fill = self.color, activefill = self.active_fill, 
+            width = self.border)
 
 WORLD = Rect(0,0,0,0)
 
@@ -72,9 +73,11 @@ WORLD = Rect(0,0,0,0)
 # Too get its position relative to the world, use get_pos()
 class psm_GUI_object(Rect):
     def __init__(self, x1, y1, x2, y2, 
-            color = "white", border = 0, parent = WORLD,active_fill = None):
+            color = "white", border = 0, parent = WORLD, 
+            active_fill = None):
         super().__init__(x1,y1,x2,y2,color,border,active_fill)
         self.parent = parent
+        if parent != WORLD: parent.add_child(self)
         self.is_visible = True
         self.is_enabled = True
         self.children = []
@@ -129,10 +132,10 @@ class psm_button(psm_GUI_object):
     DOUBLE_CLICK_INTERVAL = 10
 
     def __init__(self, x1, y1, x2, y2, color = "white", enabled = True,
-                 border = 0, parent = WORLD, 
-                 alt_text = "Button", active_fill = "white",
+                 border = 1, parent = WORLD, 
+                 alt_text = "Button", active_fill = "white", 
                  click_func = DO_NOTHING, double_click_func = DO_NOTHING,
-                 image = None):
+                 image = None, active_outline = None):
         super().__init__(x1,y1,x2,y2,color,border,parent,active_fill)
 
         # Button states
@@ -145,11 +148,13 @@ class psm_button(psm_GUI_object):
         self.chosen = False
         self.single_clicked = False
 
-        # Button appearance
-        self.alt_text = alt_text
         self.click_func = click_func
         self.double_click_func = double_click_func
+
+        # Button appearance
+        self.alt_text = alt_text
         self.image = image
+        self.active_outline = active_outline
 
     def set_chosen(self, value):
         self.chosen = value
@@ -282,6 +287,56 @@ class psm_toolbar_btn_large(psm_button):
         self.sub_tools.append(tool_btn)
         #@assert(len(self.subtools) > 0)
         self.primary_tool = self.sub_tools[0]
+
+class psm_object_handle(psm_button):
+
+    RADIUS = 4
+    BORDER = 3
+    COLOR = "cyan"
+    BORDER_COLOR = rgbString(240, 240, 240)
+    BORDER_ACTIVE = "red"
+
+    def __init__(self, x, y, parent, return_func):
+        r = psm_object_handle.RADIUS
+        super().__init__(x - r, y - r , x + r, y + r,
+                       parent = parent,
+                       color = psm_object_handle.COLOR,
+                       active_outline = psm_object_handle.BORDER_ACTIVE,
+                       alt_text = None, active_fill = None)
+        self.return_func = return_func
+        self.on_drag = False
+
+    # This function moves the button with respect to to its center 
+    def move_to(self, x, y):
+        r = psm_object_handle.RADIUS
+        self.x1 = x - r
+        self.x2 = x + r
+        self.y1 = y - r
+        self.y2 = y + r
+
+    def draw(self, canvas):
+        r = psm_object_handle.RADIUS
+        x, y = self.get_center()
+        x1 = x - r
+        x2 = x + r
+        y1 = y - r
+        y2 = y + r
+        canvas.create_oval(x1, y1, x2, y2,
+            fill = self.color, width = psm_object_handle.BORDER,
+            outline = psm_object_handle.BORDER_COLOR,
+            activeoutline = self.active_outline)
+
+    def on_mouse_down(self, x, y):
+        if self.in_borders(x, y):
+            self.on_drag = True
+            # Report the position of the mouse to the user object
+            self.return_func(x, y)
+
+    def on_mouse_up(self, x, y):
+        self.on_drag = False
+
+    def on_mouse_move(self, x, y):
+        if self.on_drag: self.return_func(x, y)
 
 # TODO: Write this
 class psm_menu_icon(psm_button):pass
