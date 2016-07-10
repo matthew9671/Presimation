@@ -74,8 +74,11 @@ class psm_field(object):
 
         self.name = name
         self.value = value
+
+        test_img_file = "Presimation_demo/Images/name_icon.gif"
+        test_icon = PhotoImage(file = test_img_file)
         # We will set the icons of the fields all at once using set_icon()
-        self.icon = None
+        self.icon = test_icon
 
         self.value_type = value_type
         self.value_max = value_max
@@ -106,13 +109,14 @@ def insert_field_in_2d_array(array, field, position):
             array.append([])
     if len(array[row]) <= col:
         n = len(array[row])
-        for i in range(n, row + 1):
+        for i in range(n, col + 1):
             array[row].append(None)
     array[row][col] = field        
 
 class psm_menu(psm_GUI_object):
 
-    BG_COLOR_NORMAL = "grey"
+    # Light orange
+    BG_COLOR_NORMAL = rgbString(237, 171, 113)
 
     def __init__(self, attributes_dict):
         self.is_visible = False
@@ -136,13 +140,16 @@ class psm_menu(psm_GUI_object):
             for row in range(len(self.tabs[tab])):
                 for col in range(len(self.tabs[tab][row])):
                     item = self.tabs[tab][row][col]
-                    x1, y1 = get_item_topleft_position(row, col)
+                    x1, y1 = self.get_item_topleft_position(row, col)
+                    # TODO: I guess we can put more of this into the class
                     button = psm_menu_icon(x1,
                                            y1,
                                            x1 + psm_field.ICON_SIZE,
                                            y1 + psm_field.ICON_SIZE,
                                            image = item.icon,
-                                           parent = panel)
+                                           color = None,
+                                           parent = panel,
+                                           border = 0)
             self.panels[tab] = panel
 
     def get_item_topleft_position(self, row, col):
@@ -184,8 +191,9 @@ class psm_menu(psm_GUI_object):
                                 starty,
                                 startx + width,
                                 starty + height, 
-                                fill = psm_menu.BG_COLOR_NORMAL)
-        self.panels[self.current_tab].resize_object(startx, starty)
+                                fill = psm_menu.BG_COLOR_NORMAL,
+                                width = 0)
+        self.panels[self.current_tab].resize(startx, starty)
         self.panels[self.current_tab].draw(canvas)
         # TODO: Add input fields!
 
@@ -202,6 +210,7 @@ class psm_object(object):
         # Whether this object will be rendered in the final presentation
         self.is_visible = True
 
+        self.dbclick_listener = psm_double_click_listener(self.toggle_menu)
         self.mouse_on = False
         self.is_selected = False
         self.menu_on = False
@@ -218,6 +227,10 @@ class psm_object(object):
         # for the user to manipulate the object
         self.handle_holder = psm_GUI_object(0,0,0,0)
         self.handles = None
+
+    def toggle_menu(self):
+        print("Menu on!")
+        self.menu_on = True
 
     def generate_handles(self): pass
 
@@ -240,12 +253,14 @@ does not belong to object!""")
             return self.attributes[field].get_value()
 
     # Returns true if point (x,y) counts as "on" the object
-    def in_borders(self, x, y):
-        pass
+    def in_borders(self, x, y): pass
+
+    def get_menu_position(self): pass
 
     def on_mouse_down(self, x, y):
         # The mainloop calls mouse_down
         # only when the object is being clicked upon
+        self.dbclick_listener.on_mouse_down(x, y)
         assert(self.in_borders(x, y))
         if self.is_selected:
             # Pass the mouse_down event to the object's children
@@ -253,17 +268,31 @@ does not belong to object!""")
             self.handle_holder.on_mouse_down(x, y)
         else:
             self.is_selected = True
-            self.menu_on = True
+
+    def on_mouse_up(self, x, y):
+        self.handle_holder.on_mouse_up(x, y)
+        self.dbclick_listener.on_mouse_up(x, y)
+
+    def update(self):
+        self.dbclick_listener.update()
 
     # Useful when we are drag-selecting objects
     def set_selected(self, value):
         self.is_selected = value
+        if value == False: 
+            print("Menu off")
+            self.menu_on = False
 
     # Pass in the ratio for drawing miniture slides
     def draw(self, canvas, startx, starty, ratio = 1):
+        if ratio == 1 and self.is_selected:
+            # We are not displaying a thumbnail
+            if self.handles == None: self.generate_handles()
+            self.handle_holder.draw(canvas)
         # We don't want to display the menu in the thumbnail
         if self.menu_on and self.menu != None and ratio == 1:
-            self.menu.draw(canvas, startx, starty)
+            x, y = self.get_menu_position()
+            self.menu.draw(canvas, x, y)
 
     def get_hashables(self):
         return (self.name, self.index)
@@ -291,9 +320,13 @@ class psm_circle(psm_object):
     def init_attributes(self):
         # Only temporary
         # Finally we will have to customize each of the fields
+        fields_per_row = 3
         for i in range(len(self.fields)):
             field_name = self.fields[i]
-            self.attributes[field_name] = psm_field(field_name)
+            position = [i // fields_per_row,
+                        i % fields_per_row]
+            self.attributes[field_name] = psm_field(field_name, position)
+        self.menu = psm_menu(self.attributes)
 
     # The x and y should be in the canvas coodrinate system
     def in_borders(self, x, y):
@@ -358,6 +391,10 @@ class psm_circle(psm_object):
         new_y = - y * curr_r / prev_r
         rim_handle.move_to(new_x, new_y)
 
+    def get_menu_position(self):
+        x, y = self.get_value("CENTER_X"), self.get_value("CENTER_Y")
+        return canvas_to_global(x, y)
+
     def on_mouse_move(self, x, y):
         self.handle_holder.on_mouse_move(x, y)
         x, y = global_to_canvas(x, y)
@@ -369,11 +406,7 @@ class psm_circle(psm_object):
         super().on_mouse_down(x, y)
         print("Object %s Selected" % self.get_value("NAME"))
 
-    def on_mouse_up(self, x, y):
-        self.handle_holder.on_mouse_up(x, y)
-
     def draw(self, canvas, startx, starty, ratio = 1):
-        super().draw(canvas, startx, starty, ratio)
         center_x = self.get_value("CENTER_X")
         center_y = self.get_value("CENTER_Y")
         radius = self.get_value("RADIUS")
@@ -389,10 +422,8 @@ class psm_circle(psm_object):
         canvas.create_oval(x1, y1, x2, y2, fill = fill_color, 
                                            width = border_width, 
                                            outline = border_color)
-        if ratio == 1 and self.is_selected:
-            # We are not displaying a thumbnail
-            if self.handles == None: self.generate_handles()
-            self.handle_holder.draw(canvas)
+        # Draw handles and the pop-up menu
+        super().draw(canvas, startx, starty, ratio)
 
 class psm_tool(object):
 
@@ -498,6 +529,10 @@ class slide(object):
     def generate_object_name(self, name):
         return name
 
+    def update(self):
+        for obj in self.objects:
+            obj.update()
+
     # Render is specific to slides
     # Has a more professional feel
     def render(self, canvas, startx, starty, edit = True, display_ratio = 1):
@@ -561,7 +596,7 @@ class Presimation(Animation):
         return tool_dict
 
     def init_GUI(self):
-        test_img_file = "Presimation_demo/Images/Test2.gif"
+        test_img_file = "Presimation_demo/Images/object_toolset.gif"
         self.test_icon = PhotoImage(file = test_img_file)
 
         self.init_size()
@@ -650,7 +685,7 @@ class Presimation(Animation):
                 toolset_name,
                 alt_text = toolset_name,
                 orientation = "left",
-                color = "blue", 
+                color = "white", 
                 parent = toolbar,
                 image = toolset_icon)  # Clarity      
 
@@ -806,6 +841,9 @@ class Presimation(Animation):
             self.update_snapshots()
             # Update all the buttons
             self.GUI_objects[0].update()
+            # We need the selected object in the working slide to update
+            # since double clicking toggles the menu
+            self.working_slide.update()
 
     def redraw_all(self):
         if self.is_initializing: return

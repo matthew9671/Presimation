@@ -338,8 +338,18 @@ class psm_object_handle(psm_button):
     def on_mouse_move(self, x, y):
         if self.on_drag: self.return_func(x, y)
 
+# The event listener is not used as gui element
+# It's just a tool for us to get double clicks events
+class psm_double_click_listener(psm_button):
+    def __init__(self, double_click_func):
+        super().__init__(0,0,0,0,
+                         double_click_func = double_click_func)
+
+    def in_borders(self, x, y):
+        return True
+
 # TODO: Write this
-class psm_menu_icon(psm_button):pass
+class psm_menu_icon(psm_button): pass
 
 class Test(Animation):
     def __init__(self):
