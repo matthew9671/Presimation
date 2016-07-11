@@ -75,10 +75,13 @@ class psm_field(object):
         self.name = name
         self.value = value
 
-        test_img_file = "Presimation_demo/Images/name_icon.gif"
+        test_img_file = "../Images/name_icon.gif"
         test_icon = PhotoImage(file = test_img_file)
         # We will set the icons of the fields all at once using set_icon()
         self.icon = test_icon
+
+        self.button = None
+        self.inputBox = None
 
         self.value_type = value_type
         self.value_max = value_max
@@ -142,7 +145,7 @@ class psm_menu(psm_GUI_object):
                     item = self.tabs[tab][row][col]
                     x1, y1 = self.get_item_topleft_position(row, col)
                     # TODO: I guess we can put more of this into the class
-                    button = psm_menu_icon(x1,
+                    item.button = psm_menu_icon(x1,
                                            y1,
                                            x1 + psm_field.ICON_SIZE,
                                            y1 + psm_field.ICON_SIZE,
@@ -150,7 +153,29 @@ class psm_menu(psm_GUI_object):
                                            color = None,
                                            parent = panel,
                                            border = 0)
+                    item.inputBox = psm_menu_inputbox(x1 + psm_field.ICON_SIZE+\
+                                    psm_field.ICON_BOX_SPACING,
+                                    y1,
+                                    x1 + psm_field.ICON_SIZE +\
+                                    psm_field.ICON_BOX_SPACING +\
+                                    psm_field.BOX_WIDTH["SMALL"],
+                                    y1 + psm_field.BOX_HEIGHT,
+                                    field = item,
+                                    entry_update_func = self.entry_update,
+                                    color = None,
+                                    border = 0,
+                                    parent = panel)
             self.panels[tab] = panel
+
+    def entry_update(self, sv, field_name):
+        print("The value of field %s is changed to %s" 
+            % (field_name, sv.get()))
+
+    def hide_inputbox(self):
+        c_tab = self.current_tab
+        for row in range(len(self.tabs[c_tab])):
+            for col in range(len(self.tabs[c_tab][row])):
+                self.tabs[c_tab][row][col].inputBox.text.place_forget()
 
     def get_item_topleft_position(self, row, col):
         row_height = psm_field.MARGIN * 2 + psm_field.ICON_SIZE
@@ -195,6 +220,7 @@ class psm_menu(psm_GUI_object):
                                 width = 0)
         self.panels[self.current_tab].resize(startx, starty)
         self.panels[self.current_tab].draw(canvas)
+
         # TODO: Add input fields!
 
 
@@ -231,6 +257,7 @@ class psm_object(object):
     def toggle_menu(self):
         print("Menu on!")
         self.menu_on = True
+        self.menu.is_visible = True
 
     def generate_handles(self): pass
 
@@ -282,6 +309,8 @@ does not belong to object!""")
         if value == False: 
             print("Menu off")
             self.menu_on = False
+            self.menu.is_visible = False
+            self.menu.hide_inputbox()
 
     # Pass in the ratio for drawing miniture slides
     def draw(self, canvas, startx, starty, ratio = 1):
@@ -596,7 +625,7 @@ class Presimation(Animation):
         return tool_dict
 
     def init_GUI(self):
-        test_img_file = "Presimation_demo/Images/object_toolset.gif"
+        test_img_file = "../Images/object_toolset.gif"
         self.test_icon = PhotoImage(file = test_img_file)
 
         self.init_size()

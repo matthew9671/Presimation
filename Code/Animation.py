@@ -14,7 +14,7 @@ class Animation(object):
 
     # We are not using these yet
     # When we use them we should change their names for consistency
-    def keyPressed(self, event): pass
+    def keyPressed(self, event): print(event.keysym)
     def keyReleased(self,event):pass
     
     # Call app.run(width,height) to get your app started
@@ -47,12 +47,13 @@ class Animation(object):
         root.bind("<Key>", keyPressedWrapper)
         root.bind("<KeyRelease>", self.keyReleased)
 
-        root.bind("<Button-1>", self.mouse_down)
+        self.canvas.bind("<Button-1>", self.mouse_down)
         root.bind("<Motion>", self.mouse_move)
         root.bind("<B1-ButtonRelease>", self.mouse_up)
 
         # set up timerFired events
         self.timerFiredDelay = Animation.DELAY # milliseconds
+
         def timerFiredWrapper():
             self.timer_fired()
             redrawAllWrapper()
@@ -65,6 +66,3 @@ class Animation(object):
         # and launch the app
         root.mainloop()
         print("Bye")
-
-
-

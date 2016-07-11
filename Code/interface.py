@@ -126,6 +126,37 @@ class psm_GUI_object(Rect):
     def set_mouse_on(self, value):
         self.mouse_on = value
 
+class psm_menu_inputbox(psm_GUI_object):
+    def __init__(self, x1, y1, x2, y2, field = None, color = "white",
+                 border = 0, parent = WORLD,
+                 entry_update_func = None):
+        super().__init__(x1, y1, x2, y2, color, border, parent)
+        self.x1 = x1
+        self.y1 = y1
+        self.width = self.x2 - self.x1
+        self.height = self.y2 - self.y1
+        self.generated = False
+        assert(field != None)
+        self.field = field
+        assert(entry_update_func != None)
+        self.entry_update = entry_update_func
+        self.sv = StringVar()
+        self.sv.trace("w", lambda name, index, mode, 
+            var = self.sv, field_name = self.field.name:
+                self.entry_update(var, field_name))
+
+    def draw(self, canvas):
+        if not self.generated:
+            self.text = Entry(canvas, textvariable = self.sv)
+            self.generated = True
+            
+        abs_x, abs_y = self.get_pos()
+        self.text.place(x = abs_x,
+                        y = abs_y,
+                        width = self.width,
+                        height = self.height)
+
+
 # The most general button object
 class psm_button(psm_GUI_object):
 
