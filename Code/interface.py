@@ -136,6 +136,7 @@ class psm_menu_inputbox(psm_GUI_object):
         self.width = self.x2 - self.x1
         self.height = self.y2 - self.y1
         self.generated = False
+        self.text = None
         assert(field != None)
         self.field = field
         assert(entry_update_func != None)
@@ -144,6 +145,10 @@ class psm_menu_inputbox(psm_GUI_object):
         self.sv.trace("w", lambda name, index, mode, 
             var = self.sv, field_name = self.field.name:
                 self.entry_update(var, field_name))
+
+    def hide(self):
+        if self.generated:
+            self.text.place_forget()
 
     def draw(self, canvas):
         if not self.generated:
@@ -227,7 +232,7 @@ class psm_button(psm_GUI_object):
             self.timer += 1
             if self.timer > psm_button.DOUBLE_CLICK_INTERVAL:
                 # Debug only
-                print("Just a single click")
+                #print("Just a single click")
                 self.single_clicked = False
                 self.timer = 0
 
