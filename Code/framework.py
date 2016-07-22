@@ -3,6 +3,10 @@ from interface import *
 import copy
 import math
 
+##############################
+# Global GUI layout constants
+##############################
+
 SCREEN_WIDTH = 900
 SCREEN_HEIGHT = 600
 
@@ -40,10 +44,13 @@ CANVAS_MARGIN_VERTICAL = (WORKSPACE_HEIGHT_R * SCREEN_HEIGHT
 # In global coordinates
 CANVAS_ORIGIN_X = SCREEN_WIDTH * WORKSPACE_SIDES_R + CANVAS_MARGIN_HORIZONTAL
 CANVAS_ORIGIN_Y = (SCREEN_HEIGHT * WORKSPACE_HEIGHT_R - CANVAS_MARGIN_VERTICAL)
-print(CANVAS_ORIGIN_Y)
 
 # Users can always see 1/4 of the rest snapshots
 TMLINE_UNCOVER = 0.25
+
+############################
+# Global helper functions
+############################
 
 # Convert global coordinates to coordinates in the workspace
 # Just for reference
@@ -122,6 +129,18 @@ class psm_field(object):
         self.position = position
         # "BASIC" "COLOR" "DIMENSIONS" and so on
         self.tab = "BASIC"
+
+    @classmethod
+    # A linear interpolation
+    # Returns a value instead of a psm_field object
+    def interpolate_value(self, from_field, to_field, ratio):
+        assert(from_field.value_type == to_field.value_type)
+        if from_field.value_type != int:
+            return from_field.get_value()
+        else:
+            from_value = from_field.get_value()
+            to_value = to_field.get_value()
+            return from_value + ratio * (to_value - from_value)
 
     def set_value(self, value):
         self.value = value
@@ -243,6 +262,7 @@ class psm_menu(psm_GUI_object):
 
         # TODO: Add input fields!
 
+# The master class of all user-created objects
 class psm_object(object):
     def __init__(self, name, index):
         # A list of all the field names
@@ -250,6 +270,7 @@ class psm_object(object):
         self.fields = ["NAME", "INDEX"]
 
         # A dictionary that stores all of the object's attributes
+        # dict<string, psm_field>
         self.attributes = dict()
 
         # Whether this object will be rendered in the final presentation
@@ -263,11 +284,11 @@ class psm_object(object):
         self.menu = None
 
         # TODO: These can be further specified
-        name_field = psm_field(name)
-        index_field = psm_field(index)
+        name_field = psm_field("NAME", position = [0,0], 
+            value = name, value_type = str)
+        index_field = psm_field("INDEX", position = [0,1], value = index)
         self.attributes["NAME"] = name_field
         self.attributes["INDEX"] = index_field
-
         # Generate the handles(control points)(type: psm_button)
         # for the user to manipulate the object
         self.handle_holder = psm_GUI_object(0,0,0,0)
@@ -284,6 +305,18 @@ class psm_object(object):
         # This might require fixing
         result.handle_holder = copy.copy(instance.handle_holder)
         result.menu = psm_menu.copy(instance.menu)
+        return result
+
+    @classmethod
+    # Returns a psm_object that is in between of two objects
+    # This interpolation is linear
+    def interpolate(self, from_object, to_object, ratio):
+        result = psm_object.copy(from_object)
+        for name in result.fields:
+            from_field = from_object.attributes[name]
+            to_field = to_object.attributes[name]
+            value = psm_field.interpolate_value(from_field, to_field, ratio)
+            result.set_value(name, value)
         return result
 
     def toggle_menu(self):
@@ -382,11 +415,17 @@ class psm_circle(psm_object):
         # Only temporary
         # Finally we will have to customize each of the fields
         fields_per_row = 3
-        for i in range(len(self.fields)):
+        # Start with 2 since name and index are always the first 2
+        for i in range(2, len(self.fields)):
             field_name = self.fields[i]
             position = [i // fields_per_row,
                         i % fields_per_row]
-            self.attributes[field_name] = psm_field(field_name, position)
+            if field_name in ["FILL_COLOR", "BORDER_COLOR"]:
+                value_type = str
+            else:
+                value_type = int
+            self.attributes[field_name] = psm_field(field_name, position, 
+                                                    value_type = value_type)
         self.menu = psm_menu(self.attributes)
 
     # The x and y should be in the canvas coodrinate system
@@ -488,6 +527,8 @@ class psm_circle(psm_object):
         # Draw handles and the pop-up menu
         super().draw(canvas, startx, starty, ratio)
 
+# Tools respond to mouse events and creates corresponding objects
+# and returns them to the mainloop
 class psm_tool(object):
 
     # The minimum size (width and height) that an object can have
@@ -516,7 +557,7 @@ class psm_tool(object):
             self.mouse_pressed = True
             self.generate_object(object_name)
 
-    def mouse_up(self, x, y):
+    def on_mouse_up(self, x, y):
         self.mouse_pressed = False
         # Pass the "ownership" of the object being generated
         # from itself to the main loop
@@ -524,7 +565,7 @@ class psm_tool(object):
         self.current_object = None
         return current_object
 
-    def mouse_move(self, x, y):
+    def on_mouse_move(self, x, y):
         if self.mouse_pressed:
             width = x - self.drag_start[0]
             height = y - self.drag_start[1]
@@ -580,9 +621,13 @@ class psm_circle_tool(psm_tool):
         self.current_object.set_value("RADIUS", r)
         self.current_object.update_handles()
 
+# A slide is a set of user objects
+# It holds methods like generate_name 
+# which finds an appropriate name for a new object in the slide
 class slide(object):
     def __init__(self):
         self.objects = []
+        self.object_dict = dict()
 
     @classmethod
     def copy(self, instance):
@@ -590,19 +635,35 @@ class slide(object):
         for obj in instance.objects:
             obj_copy = psm_object.copy(obj)
             result.add_object(obj_copy)
+            print(obj.get_value("NAME"))
         return result
 
     @classmethod
     def interpolate(self, from_slide, to_slide, ratio):
-        return from_slide
+        result = slide()
+        for name in from_slide.object_dict.keys():
+            from_object = from_slide.object_dict[name]
+            to_object = to_slide.object_dict[name]
+            # This ratio we pass on might change
+            # Depending on which interpolation mode we're using
+            # right now it's just linear
+            obj = psm_object.interpolate(from_object, to_object, ratio)
+            result.add_object(obj)
+        return result
 
     def add_object(self, user_object):
         self.objects.append(user_object)
+        self.object_dict[user_object.get_value("NAME")] = user_object
 
     # Returns an object name that is unique in the slide
-    # TODO: Write this
     def generate_object_name(self, name):
-        return name
+        temp_name = name
+        index = 1
+        while temp_name in self.object_dict.keys():
+            # Add a number after the object's name
+            temp_name = "%s%d" % (name, index)
+            index += 1
+        return temp_name
 
     def update(self):
         for obj in self.objects:
@@ -615,6 +676,7 @@ class slide(object):
             if edit or user_object.is_visible:
                 user_object.draw(canvas, startx, starty, display_ratio)
 
+# A slibe_btn (aka snapshot) is a button that represents a slide
 class slide_btn(psm_button):
 
     HEIGHT = CANVAS_HEIGHT * CANVAS_TO_SLIDE
@@ -648,6 +710,7 @@ class slide_btn(psm_button):
 
         self.slide.render(canvas, x1, y2, display_ratio = CANVAS_TO_SLIDE)
 
+# Play/stop button
 class play_btn(psm_button):
     
     RADIUS = 50
@@ -988,8 +1051,8 @@ class Presimation(Animation):
     # Will be changed in the future, same as above
     def get_playback_progress(self):
         slide_index = self.time // self.slide_time_interval
-        ratio = [(self.time % self.slide_time_interval) 
-                    / self.slide_time_interval]
+        ratio = ((self.time % self.slide_time_interval) 
+                    / self.slide_time_interval)
         return slide_index, ratio
 
 ############################### system events ##################################
@@ -1032,7 +1095,7 @@ class Presimation(Animation):
                 if obj.is_selected:
                     obj.on_mouse_up(event.x, event.y)
         else:
-            new_object = self.current_tool.mouse_up(event.x, event.y)
+            new_object = self.current_tool.on_mouse_up(event.x, event.y)
             if new_object != None:
                 self.working_slide.add_object(new_object)
             # Change tool to "selection" every time we use it once
@@ -1048,7 +1111,7 @@ class Presimation(Animation):
                 if obj.is_selected:
                     obj.on_mouse_move(event.x, event.y)
         else:
-            self.current_tool.mouse_move(event.x, event.y)
+            self.current_tool.on_mouse_move(event.x, event.y)
 
         mouse_over_slide = False
         # check if the mouse hovers on the snapshots
