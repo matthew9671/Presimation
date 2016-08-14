@@ -193,7 +193,7 @@ class psm_field(object):
     def set_value(self, value, update_inputbox = True):
         # You cannot set the value directly when it depends on something else
         if not self.is_independent and update_inputbox: 
-            print("Field", self.name, "is not independent!")
+            #print("Field", self.name, "is not independent!")
             return False
 
         # Many times the value is in string format
@@ -945,7 +945,7 @@ class slide(object):
 
     # This is the core of the evaluation process
     def parse(self, expr):
-        expr = expr.strip().upper()
+        expr = expr.strip()
         # Two steps:
         expr_list = self.generate_expr_list(expr)
         return self.generate_ast(expr_list)
@@ -1090,12 +1090,35 @@ class slide(object):
         index = ast.find(".")
         if index == -1:
             object_referenced = obj
-            field = ast
+            field = ast.upper()
         else:
             object_name = ast[:index]
+            # Find the index of the object
+            l_bracket = object_name.find("[")
+            r_bracket = object_name.find("]")
+            if l_bracket == -1 and r_bracket == -1:
+                # No brackets are found
+                object_index = 0
+            elif (r_bracket > l_bracket and 
+                  l_bracket != -1 and
+                  r_bracket == index - 1):
+                object_index = object_name[l_bracket+1:r_bracket]
+                object_name = object_name[:l_bracket]
+                if not is_num_type(object_index): return None
+                object_index = int(object_index)
+            else:
+                # Something is wrong!
+                return None
+            
             if object_name not in self.object_dict: return None
-            object_referenced = self.object_dict[object_name]
-            field = ast[i+1:]
+            object_list = self.object_dict[object_name]
+
+            if type(object_index) != int or object_index >= len(object_list):
+                return None
+
+            object_referenced = object_list[object_index]
+
+            field = ast[index+1:].upper()
 
         if field not in object_referenced.fields: return None
         return object_referenced.get_value(field)
