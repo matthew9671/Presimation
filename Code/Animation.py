@@ -14,8 +14,8 @@ class Animation(object):
 
     # We are not using these yet
     # When we use them we should change their names for consistency
-    def keyPressed(self, event): print(event.keysym)
-    def keyReleased(self,event):pass
+    def key_pressed(self, event): pass
+    def key_released(self,event): pass
     
     # Call app.run(width,height) to get your app started
     def run(self, width = 800, height = 600):
@@ -29,10 +29,10 @@ class Animation(object):
         self.height = height
         self.canvas = Canvas(root, width = width, height = height)
         self.canvas.pack()
-        self.toolbar = Canvas(root, width=width/2, height=height)
-        self.toolbar
-        m1.add(self.canvas)
-        self.window = m1
+        # self.toolbar = Canvas(root, width=width/2, height=height)
+        # self.toolbar
+        # m1.add(self.canvas)
+        # self.window = m1
 
         # set up events
         def redrawAllWrapper():
@@ -41,11 +41,15 @@ class Animation(object):
             self.canvas.update()
 
         def keyPressedWrapper(event):
-            self.keyPressed(event)
+            self.key_pressed(event)
+            redrawAllWrapper()
+
+        def keyReleasedWrapper(event):
+            self.key_released(event)
             redrawAllWrapper()
 
         root.bind("<Key>", keyPressedWrapper)
-        root.bind("<KeyRelease>", self.keyReleased)
+        root.bind("<KeyRelease>", keyReleasedWrapper)
 
         self.canvas.bind("<Button-1>", self.mouse_down)
         root.bind("<Motion>", self.mouse_move)

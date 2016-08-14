@@ -142,19 +142,46 @@ class psm_menu_inputbox(psm_GUI_object):
         assert(entry_update_func != None)
         self.entry_update = entry_update_func
         self.sv = StringVar()
+
+        self.active_change = True
+        self.has_error = False
+        self.error_displayed = False
+
         self.sv.trace("w", lambda name, index, mode, 
             var = self.sv, field_name = self.field.name:
-                self.entry_update(var, field_name))
+                self.entry_update(var, field_name, self.active_change))
 
     def hide(self):
         if self.generated:
             self.text.place_forget()
 
+    def set_error(self, value):
+        if self.has_error != value: 
+            if self.text != None: self.text.place_forget()
+            self.generated = False
+            self.error_displayed = False
+            print("Status changed!")
+        self.has_error = value
+
+    def update_value(self):
+        self.active_change = False
+        self.sv.set(str(self.field.get_expression()))
+        self.has_error = False
+        self.active_change = True
+
     def draw(self, canvas):
+        # This is pretty messed up
+        # I want to just change the background of the inputbox
+        # Not create a brand new one!
         if not self.generated:
-            self.text = Entry(canvas, textvariable = self.sv)
+            if self.text != None: self.text.place_forget()
+            if not self.has_error:
+                self.text = Entry(canvas, textvariable = self.sv)
+                self.update_value()
+            else:
+                self.text = Entry(canvas, textvariable = self.sv, fg = "red")
             self.generated = True
-            
+
         abs_x, abs_y = self.get_pos()
         self.text.place(x = abs_x,
                         y = abs_y,
