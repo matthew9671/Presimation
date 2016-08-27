@@ -83,13 +83,15 @@ def global_to_canvas(x, y = None):
     if y == None:
         y = x[1]
         x = x[0]
-    return (x - CANVAS_ORIGIN_X, CANVAS_ORIGIN_Y - y)
+    return (int(x - CANVAS_ORIGIN_X), 
+            int(CANVAS_ORIGIN_Y - y))
 
 def canvas_to_global(x, y = None):
     if y == None:
         y = x[1]
         x = x[0]
-    return (x + CANVAS_ORIGIN_X, CANVAS_ORIGIN_Y - y)
+    return (int(x + CANVAS_ORIGIN_X), 
+            int(CANVAS_ORIGIN_Y - y))
 
 # colors
 lightGrey = rgbString(200,200,200)
@@ -169,7 +171,7 @@ class psm_field(object):
     # Returns a value instead of a psm_field object
     def interpolate_value(self, from_field, to_field, ratio):
         assert(from_field.value_type == to_field.value_type)
-        if from_field.value_type not in [float, int]:
+        if from_field.value_type != float:
             return from_field.get_value()
         else:
             from_value = from_field.get_value()
@@ -188,6 +190,9 @@ class psm_field(object):
         except:
             return None, False
 
+    # TODO: Really think through the logic of set_value, set_expression
+    # and behavior in case of error
+
     # Attempt to set the value of the field
     # If it fails, returns false to the caller
     def set_value(self, value, update_inputbox = True):
@@ -200,7 +205,8 @@ class psm_field(object):
         value, passed = self.type_check(value)
         # The value is not of the correct type
         if not passed: 
-            print(value, ": Typecheck failed! Should be ", self.value_type)
+            print(value, ": Typecheck failed on " + self.name + 
+                "! Should be ", self.value_type)
             return False
 
         if (type(value) not in [float, int] 
@@ -278,6 +284,7 @@ class psm_menu(psm_GUI_object):
         self.tabs = dict()
         for field in attributes_dict.values():
             tab = field.tab
+            # print(tab, field)
             if tab not in self.tabs.keys():
                 self.tabs[tab] = []
             if not field.is_hidden:
@@ -394,7 +401,7 @@ class psm_object(object):
         self.slide = slide
         # A list of all the field names
         # Which are keys to the attributes dictionary
-        self.fields = ["NAME", "INDEX"]
+        self.fields = ["NAME", "INDEX"] + self.fields
 
         # A dictionary that stores all of the object's attributes
         # dict<string, psm_field>
@@ -411,11 +418,16 @@ class psm_object(object):
         self.menu = None
 
         # TODO: These can be further specified
-        name_field = psm_field("NAME", self, position = [0,0], 
-            value = name, value_type = str)
+        name_field = psm_field("NAME", self, position = [0,0], value_type = str)
         index_field = psm_field("INDEX", self, position = [0,1])
         self.attributes["NAME"] = name_field
         self.attributes["INDEX"] = index_field
+
+        self.init_attributes()
+        self.set_value("NAME", name)
+        self.set_value("INDEX", 0)
+
+        self.menu = psm_menu(self.attributes)
         # Generate the handles(control points)(type: psm_button)
         # for the user to manipulate the object
         self.handle_holder = psm_GUI_object(0,0,0,0)
@@ -471,14 +483,16 @@ class psm_object(object):
     def set_value(self, field, value):
         if field not in self.fields:
             raise Exception(
-                """Field \"" + field + "\" does not belong to object!""")
+                "Field \"" + field + "\" does not belong to object!")
         else:
             self.attributes[field].set_value(value)
+            self.update_handles
 
     def get_value(self, field):
         if field not in self.fields:
-            raise Exception(
-            """Field \"" + field + "\" does not belong to object!""")
+            print(
+            "Field \"" + field + "\" does not belong to object!")
+            return None
         else:
             return self.attributes[field].get_value()
 
@@ -486,6 +500,17 @@ class psm_object(object):
     def in_borders(self, x, y): pass
 
     def get_menu_position(self): pass
+
+    # Change an object's center to x, y in the global coordinates
+    # Usually used by copy tool
+    def change_center(self, x, y):
+        x, y = global_to_canvas(x, y)
+        self.set_value("CENTER_X", x)
+        self.set_value("CENTER_Y", y)
+        # Every time some values are set these 
+        # update functions have to be called
+        self.update_fields()
+        self.update_handles()
 
     def on_mouse_down(self, x, y):
         # The mainloop calls mouse_down
@@ -514,6 +539,12 @@ class psm_object(object):
             self.menu_on = False
             self.menu.is_visible = False
             self.menu.hide_inputbox()
+
+    # Returns x1, y1, x2, y2
+    # where (x1, y1) is the lower left corner of the bounding box
+    # and (x2, y2) is the upper right corner
+    def get_bounding_box(self):
+        pass
 
     # Pass in the ratio for drawing miniture slides
     def draw(self, canvas, startx, starty, ratio = 1):
@@ -546,11 +577,10 @@ class psm_circle(psm_object):
     SELECTED_EXTRA_WIDTH = 8
 
     def __init__(self, name, slide):
-        super().__init__(name, slide)
-        self.fields.extend (["CENTER_X", "CENTER_Y", "RADIUS", 
+        self.fields = ["CENTER_X", "CENTER_Y", "RADIUS", 
                              "FILL_COLOR", "BORDER_COLOR",
-                             "BORDER_WIDTH"])
-        self.init_attributes()
+                             "BORDER_WIDTH"]
+        super().__init__(name, slide)
 
     def init_attributes(self):
         # Only temporary
@@ -563,12 +593,13 @@ class psm_circle(psm_object):
                         i % fields_per_row]
             if field_name in ["FILL_COLOR", "BORDER_COLOR"]:
                 value_type = str
-            else:
+            elif field_name in ["INDEX"]:
                 value_type = int
+            else:
+                value_type = float
             self.attributes[field_name] = psm_field(field_name, self,
                                                     position = position, 
                                                     value_type = value_type)
-        self.menu = psm_menu(self.attributes)
 
     # The x and y should be in the canvas coodrinate system
     def in_borders(self, x, y):
@@ -580,11 +611,12 @@ class psm_circle(psm_object):
         return ((x - center_x) ** 2 + (y - center_y) ** 2 
                <= (radius + border / 2) ** 2)
 
-    def change_center(self, x, y):
-        x, y = global_to_canvas(x, y)
-        self.set_value("CENTER_X", x)
-        self.set_value("CENTER_Y", y)
-        self.update_handles()
+    def get_bounding_box(self):
+        x = self.get_value("CENTER_X")
+        y = self.get_value("CENTER_Y")
+        r = self.get_value("RADIUS")
+        b = self.get_value("BORDER_WIDTH")
+        return x - r - b, y - r - b, x + r + b, y + r + b
 
     def change_radius(self, x, y):
         x, y = global_to_canvas(x, y)
@@ -678,32 +710,412 @@ class psm_circle(psm_object):
         # Draw handles and the pop-up menu
         super().draw(canvas, startx, starty, ratio)
 
-# TODO: WRITE ALL OF THESE!!!
+class psm_rect(psm_object):
 
-class psm_rect(psm_object): pass
+    SELECTED_EXTRA_WIDTH = 8
 
-# Selection and timer?
-class psm_object_abstract(psm_object):
+    def __init__(self, name, slide):
+        self.fields = ["CENTER_X", "CENTER_Y", "LEFT", "BOTTOM", 
+                       "WIDTH", "HEIGHT", 
+                       "FILL_COLOR", "BORDER_COLOR",
+                       "BORDER_WIDTH"]
+        super().__init__(name, slide)
 
-    SIZE = 20
+    def init_attributes(self):
+        # Only temporary
+        # Finally we will have to customize each of the fields
+        fields_per_row = 3
+        # Start with 2 since name and index are always the first 2
+        for i in range(2, len(self.fields)):
+            field_name = self.fields[i]
+            position = [i // fields_per_row,
+                        i % fields_per_row]
+            if field_name in ["FILL_COLOR", "BORDER_COLOR"]:
+                value_type = str
+            elif field_name in ["INDEX"]:
+                value_type = int
+            else:
+                value_type = float
+            self.attributes[field_name] = psm_field(field_name, self,
+                                                    position = position, 
+                                                    value_type = value_type,
+                                                    # This is temporary
+                                                    value_min = -1000)
 
-    def __init__(self, name, img):
-        super.__init__(name)
-        self.img = img
+    # The x and y should be in the canvas coodrinate system
+    def in_borders(self, x, y):
+        x, y = global_to_canvas(x, y)
+        left = self.get_value("LEFT")
+        bottom = self.get_value("BOTTOM")
+        width = self.get_value("WIDTH")
+        height = self.get_value("HEIGHT")
+        half_border = self.get_value("BORDER_WIDTH") / 2
+
+        left_bound = min(left - half_border, left + width + half_border)
+        right_bound = max(left - half_border, left + width + half_border)
+        bottom_bound = min(bottom - half_border, bottom + height + half_border)
+        top_bound = max(bottom - half_border, bottom + height + half_border)
+
+        return (x > left_bound and x < right_bound
+            and y > bottom_bound and y < top_bound)
+
+    def get_bounding_box(self):
+        x = self.get_value("LEFT")
+        y = self.get_value("BOTTOM")
+        w = self.get_value("WIDTH")
+        h = self.get_value("HEIGHT")
+        b = self.get_value("BORDER_WIDTH")
+
+        return x - b, y - b, x + w + b, y + h + b
+
+    def change_bl(self, x, y):
+        x, y = global_to_canvas(x, y)
+        bottom = self.get_value("BOTTOM")
+        left = self.get_value("LEFT")
+        width = self.get_value("WIDTH")
+        height = self.get_value("HEIGHT")
+        
+        self.set_value("WIDTH", width + left - x)
+        self.set_value("HEIGHT", height + bottom - y)
+        self.set_value("LEFT", x)
+        self.set_value("BOTTOM", y)
+        self.update_handles()
+
+    def change_br(self, x, y):
+        x, y = global_to_canvas(x, y)
+        left = self.get_value("LEFT")
+        bottom = self.get_value("BOTTOM")
+        height = self.get_value("HEIGHT")
+        # Notice that width can be less than 0
+        # We are allowing this for the moment
+        # Otherwise repositioning of handles would get tricky
+        self.set_value("WIDTH", x - left)
+        self.set_value("BOTTOM", y)
+        self.set_value("HEIGHT", height + bottom - y)
+        self.update_handles()
+
+    def change_tl(self, x, y):
+        x, y = global_to_canvas(x, y)
+        bottom = self.get_value("BOTTOM")
+        left = self.get_value("LEFT")
+        width = self.get_value("WIDTH")
+        # Notice that width can be less than 0
+        # We are allowing this for the moment
+        # Otherwise repositioning of handles would get tricky
+        self.set_value("HEIGHT", y - bottom)
+        self.set_value("LEFT", x)
+        self.set_value("WIDTH", width + left - x)
+        self.update_handles()
+
+    def change_tr(self, x, y):
+        x, y = global_to_canvas(x, y)
+        bottom = self.get_value("BOTTOM")
+        left = self.get_value("LEFT")
+        # Notice that width can be less than 0
+        # We are allowing this for the moment
+        # Otherwise repositioning of handles would get tricky
+        self.set_value("HEIGHT", y - bottom)
+        self.set_value("WIDTH", x - left)
+        self.update_handles()        
+
+    def generate_handles(self):
+        width = self.get_value("WIDTH")
+        height = self.get_value("HEIGHT")
+
+        bl = psm_object_handle(0, 0, 
+            return_func = self.change_bl,
+            parent = self.handle_holder)
+        br = psm_object_handle(width, 0, 
+            return_func = self.change_br,
+            parent = self.handle_holder)
+        tl = psm_object_handle(0, height, 
+            return_func = self.change_tl,
+            parent = self.handle_holder)
+        tr = psm_object_handle(width, height, 
+            return_func = self.change_tr,
+            parent = self.handle_holder)
+
+        # print("Holder:", self.handle_holder.get_center())
+        # print("Rim:", rim_handle.get_center())
+        self.handles = [bl, br, tl, tr]
+
+    def change_center(self, x, y):
+        x, y = global_to_canvas(x, y)
+
+        w = self.get_value("WIDTH")
+        h = self.get_value("HEIGHT")
+
+        self.set_value("LEFT", x - w / 2)
+        self.set_value("BOTTOM", y - h / 2)
+
+    def update_handles(self):
+        if self.handles == None:
+            self.generate_handles()
+
+        x = self.get_value("LEFT")
+        y = self.get_value("BOTTOM")
+        w = self.get_value("WIDTH")
+        h = self.get_value("HEIGHT")
+
+        self.set_value("CENTER_X", x + w / 2)
+        self.set_value("CENTER_Y", y + h / 2)
+
+        x, y = canvas_to_global(x, y)
+        self.handle_holder.resize(x, y)
+
+        # Bottom right
+        self.handles[1].move_to(w, 0)
+        # Top left
+        self.handles[2].move_to(0, -h)
+        # Top right
+        self.handles[3].move_to(w, -h)
+
+    def get_menu_position(self):
+        left = self.get_value("LEFT")
+        bottom = self.get_value("BOTTOM")
+        width = self.get_value("WIDTH")
+        height = self.get_value("HEIGHT")
+        x = left + width / 2
+        y = bottom + height / 2
+        return canvas_to_global(x, y)
+
+    def on_mouse_move(self, x, y):
+        self.handle_holder.on_mouse_move(x, y)
+        self.update_handles()
+
+    def on_mouse_down(self, x, y):
+        super().on_mouse_down(x, y)
+        #print("Object %s Selected" % self.get_value("NAME"))
 
     def draw(self, canvas, startx, starty, ratio = 1):
+        left = self.get_value("LEFT")
+        bottom = self.get_value("BOTTOM")
+        width = self.get_value("WIDTH")
+        height = self.get_value("HEIGHT")
+        fill_color = self.get_value("FILL_COLOR")
+        border_color = self.get_value("BORDER_COLOR")
+        border_width = self.get_value("BORDER_WIDTH")
+
+        x1 = startx + left * ratio
+        x2 = startx + (left + width) * ratio
+        # Note the the +y direction on the canvas is up
+        # Because it is convinient for a coordinate system 
+        y1 = starty - bottom * ratio
+        y2 = starty - (bottom + height) * ratio
+
+        if self.is_selected and ratio == 1:
+            selected_width = border_width + psm_circle.SELECTED_EXTRA_WIDTH
+            canvas.create_rectangle(x1, y1, x2, y2, fill = fill_color, 
+                                           width = selected_width, 
+                                           outline = psm_object.select_color)
+        # Draw the circle itself
+        canvas.create_rectangle(x1, y1, x2, y2, fill = fill_color, 
+                                           width = border_width, 
+                                           outline = border_color)
+        # Draw handles and the pop-up menu
+        super().draw(canvas, startx, starty, ratio)
+
+class psm_object_abstract(psm_object):
+
+    ICON_SIZE = 30
+    MARGIN = 10
+    BORDER_WIDTH = 4
+    FILL_NORMAL = "cyan"
+    FILL_SELECTED = "blue"
+
+    def __init__(self, name, slide, img):
+        self.fields.extend(["CENTER_X", "CENTER_Y"])
+        super().__init__(name, slide)
+        self.img = img
+        self.is_visible = False
+
+    def in_borders(self, x, y):
+        x, y = global_to_canvas(x, y)
+        center_x = self.get_value("CENTER_X")
+        center_y = self.get_value("CENTER_Y")
+        a = psm_object_abstract.ICON_SIZE / 2
+        return (x > center_x - a 
+            and x < center_x + a
+            and y > center_y - a
+            and y < center_y + a)
+
+    def get_menu_position(self):
+        center_x = self.get_value("CENTER_X")
+        center_y = self.get_value("CENTER_Y")
+
+        return canvas_to_global(center_x, center_y)
+
+    def on_mouse_move(self, x, y):
+        self.handle_holder.on_mouse_move(x, y)
+
+    # The position of the icon can not be changed
+    def change_center(self, x, y): pass
+
+    def set_value(self, field_name, value):
+        result = super().set_value(field_name, value)
+        if field_name == "INDEX":
+            print("Dectect set_value on index")
+            print("value =", value)
+            # The icons representing abstract objects are arranged in a certain way
+            x, y = self.slide.get_abstract_icon_pos(self.get_value("NAME"),
+                                                    value)
+            print(x, y)
+            self.set_value("CENTER_X", x)
+            self.set_value("CENTER_Y", y)
+
+        return result
+
+    def draw(self, canvas, startx, starty, ratio = 1):
+        super().draw(canvas, startx, starty, ratio)
         if ratio == 1:
+            x, y = self.get_value("CENTER_X"), self.get_value("CENTER_Y")
+            x = startx + x
+            y = starty - y
+            half_size = psm_object_abstract.ICON_SIZE / 2
 
-            canvas.create_image(x, y, image = self.image)
+            if self.is_selected:
+                fill_color = psm_object_abstract.FILL_SELECTED
+            else:
+                fill_color = psm_object_abstract.FILL_NORMAL
 
+            canvas.create_rectangle(x - half_size,
+                                    y - half_size,
+                                    x + half_size,
+                                    y + half_size,
+                                    fill = fill_color,
+                                    width = psm_object_abstract.BORDER_WIDTH)
+            canvas.create_image(x, y, image = self.img)
+
+# A simple version of selection object
+# Which selects instances with continuous indices within an array of objects
 class psm_selection(psm_object_abstract):
-    def __init__(self, name):
-        super().__init__(name, 0)
-        self.fields.extend (["CENTER_X", "CENTER_Y", 
-            "TARGET_NAME", "START_INDEX", "END_INDEX"])
-        self.init_attributes()
 
-    def init_attributes(self): pass
+    IMAGE = "selection.gif"
+    MARGIN = 20
+    BORDER_WIDTH = 2
+
+    def __init__(self, name, slide):
+        img_file = os.path.join(__location__, 
+                            "../Images/Abstract Objects/" + psm_selection.IMAGE)
+        img = PhotoImage(file = img_file)
+        self.fields = ["TARGET_NAME", "START_INDEX", "END_INDEX"]
+        super().__init__(name, slide, img)
+        # A list of objects with the same name
+        self.selected_object = None
+
+    def init_attributes(self):
+        # Only temporary
+        # Finally we will have to customize each of the fields
+        fields_per_row = 3
+        # Start with 2 since name and index are always the first 2
+        for i in range(2, len(self.fields)):
+            field_name = self.fields[i]
+            position = [i // fields_per_row,
+                        i % fields_per_row]
+            if field_name in ["TARGET_NAME"]:
+                value_type = str
+            elif field_name in ["INDEX", "START_INDEX", "END_INDEX"]:
+                value_type = int
+            else:
+                value_type = float
+            self.attributes[field_name] = psm_field(field_name, self,
+                                                    position = position, 
+                                                    value_type = value_type)
+
+    def get_bounding_box(self):
+        if self.selected_object == None:
+            print("Nothing selected!")
+            return None
+        else:
+            # Find the smallest bounding box 
+            # that bounds all the objects selected
+            x1 = None
+            y1 = None
+            x2 = None
+            y2 = None
+            start = self.get_value("START_INDEX")
+            end = self.get_value("END_INDEX")
+            for i in range(start, end):
+                result = self.selected_object[i].get_bounding_box()
+                if result == None: 
+                    return None
+                else:
+                    new_x1, new_y1, new_x2, new_y2 = result
+                if x1 == None or x1 > new_x1: x1 = new_x1
+                if y1 == None or y1 > new_y1: y1 = new_y1
+                if x2 == None or x2 < new_x2: x2 = new_x2
+                if y2 == None or y2 < new_y2: y2 = new_y2
+        margin = psm_selection.MARGIN
+        return x1 - margin, y1 - margin, x2 + margin, y2 + margin
+
+    def update(self):
+        super().update()
+        target = self.get_value("TARGET_NAME")
+        start = self.get_value("START_INDEX")
+        end = self.get_value("END_INDEX")
+        object_list = self.slide.get_object_list(target)
+        if (object_list == None
+         or len(object_list) <= start 
+         or len(object_list) < end
+         or start < 0
+         or start >= end):
+            self.selected_object = None
+            return
+        else:
+            self.selected_object = object_list
+
+    # If you want to get an attribute of the selection itself
+    # use selection.[field name]
+    # If you want the attribute of the object under selection
+    # use selection.[[index]].[field name]
+    # i.e. selection.[1].[0].center_x
+    def get_value(self, field):
+        left_bracket = field.find("[")
+        if left_bracket == -1: 
+            result = super().get_value(field)
+            if result == None: print("No left bracket")
+            return result
+        elif left_bracket == 0:
+            right_bracket = field.find("]")
+            index = field[left_bracket+1:right_bracket]
+            index = self.slide.evaluate(index, self)
+            # TODO: Revise this
+            field = field[right_bracket+2:]
+            if type(index) != int:
+                print("Weird index")
+                return None
+
+            index += self.get_value("START_INDEX")
+            if self.selected_object == None:
+                print("No objects")
+                return None
+            elif index >= self.get_value("END_INDEX"):
+                print("Index out of bound")
+                return None
+            else:
+                print("field:", field)
+                return self.selected_object[index].get_value(field)
+        else:
+            print("Something's reaaly wrong")
+
+    def draw(self, canvas, startx, starty, ratio = 1):
+        # Selection object only appears at edit mode
+        if ratio != 1: return
+        super().draw(canvas, startx, starty, ratio)
+
+        if not self.is_selected: return
+        # Only draw the selection box when itself is selection
+        result = self.get_bounding_box()
+        if result != None:
+            x1, y1, x2, y2 = result
+            # Save the trouble of using startx and starty
+            # Since selection is only visible in edit mode (for now)
+            x1, y1 = canvas_to_global(x1, y1)
+            x2, y2 = canvas_to_global(x2, y2)
+            canvas.create_rectangle(x1, y1, x2, y2, 
+                fill = None,
+                width = psm_selection.BORDER_WIDTH,
+                dash = (2, 4))
 
 class psm_timer(psm_object_abstract): pass
 
@@ -785,7 +1197,7 @@ class psm_tool(object):
         return self.object_name
 
 # TODO: Change this name
-SELECTION_TOOL = psm_tool("Selection tool", None)
+CLICK_SELECT = psm_tool("Click select", None)
 
 class psm_copy_tool(psm_tool):
 
@@ -813,8 +1225,8 @@ class psm_copy_tool(psm_tool):
         # We're assuming that every object has the "CENTER" fields
         x = self.original_pos[0] + dx
         y = self.original_pos[1] + dy
-        self.current_object.set_value("CENTER_X", x)
-        self.current_object.set_value("CENTER_Y", y)
+        x, y = canvas_to_global(x, y)
+        self.current_object.change_center(x, y)
 
 # Copy tool is activated with "D"
 # and it's not on the toolbar, so we're defining it globally
@@ -848,10 +1260,45 @@ class psm_circle_tool(psm_tool):
         self.current_object.set_value("RADIUS", r)
         self.current_object.update_handles()
 
+class psm_rect_tool(psm_tool):
+
+    MIN_SIDE = 5
+
+    def __init__(self):
+        super().__init__(tool_name = "Rectangle tool", object_name = "Rect")
+        self.default_values = {
+            "FILL_COLOR": "white",
+            "BORDER_COLOR": "black",
+            "BORDER_WIDTH": 3
+        }
+
+    def generate_object(self, object_name, slide):
+        x, y = self.drag_start[0], self.drag_start[1]
+        self.current_object = psm_rect(object_name, slide)
+        self.current_object.set_value("LEFT", x)
+        self.current_object.set_value("BOTTOM", y)
+        self.current_object.set_value("WIDTH", psm_rect_tool.MIN_SIDE)
+        self.current_object.set_value("HEIGHT", psm_rect_tool.MIN_SIDE)
+        self.current_object.update_handles()
+        for field_name in self.default_values:
+            self.current_object.set_value(field_name,
+                                          self.default_values[field_name])
+
+    def resize_object(self, dx, dy):
+        self.current_object.set_value("WIDTH", dx)
+        self.current_object.set_value("HEIGHT", dy)
+        self.current_object.update_handles()
+
 class psm_selection_tool(psm_tool):
     def __init__(self):
         super().__init__(tool_name = "Selection tool", 
             object_name = "Selection")
+
+    def generate_object(self, object_name, slide, selected_name, index):
+        self.current_object = psm_selection(object_name, slide)
+        self.current_object.set_value("TARGET_NAME", selected_name)
+        self.current_object.set_value("START_INDEX", index)
+        self.current_object.set_value("END_INDEX", index + 1)
 
 # A slide is a set of user objects
 # It holds methods like generate_name 
@@ -877,6 +1324,7 @@ class slide(object):
         print(self.parse("(1+2)*(3+4)"))
         print(self.parse("(1+(2+3)*(4))"))
         print("Testing Evaluate()...")
+        print(self.evaluate("10+", None))
         print("1+2+3+4=", end = "")
         print(self.evaluate("1+2+3+4", None))
         print("(1+(2+3)*(4))=", end = "")
@@ -931,6 +1379,42 @@ class slide(object):
     def update(self):
         for obj in self.objects:
             obj.update()
+
+    # Get the series of objects by name
+    # Returns List<psm_object>
+    def get_object_list(self, name):
+        if name not in self.object_dict.keys():
+            return None
+        else:
+            return self.object_dict[name]
+
+    # Get the canvas x, y position of an abstract object's icon
+    def get_abstract_icon_pos(self, name, index):
+        count = 0
+        names_seen = set()
+        for obj in self.objects:
+            curr_name = obj.get_value("NAME")
+            if curr_name not in names_seen:
+                if curr_name == name:
+                    break
+                if isinstance(obj, psm_object_abstract):
+                    count += 1
+                    names_seen.add(curr_name)
+
+        x = (psm_object_abstract.MARGIN * (count + 1) + 
+             psm_object_abstract.ICON_SIZE * (count + 0.5))
+        y = (psm_object_abstract.MARGIN * (index + 1) + 
+             psm_object_abstract.ICON_SIZE * (index + 0.5))
+        return x, y
+
+    # Render is specific to slides
+    # Has a more professional feel
+    def render(self, canvas, startx, starty, edit = True, display_ratio = 1):
+        for user_object in self.objects:
+            if edit or user_object.is_visible:
+                user_object.draw(canvas, startx, starty, display_ratio)
+
+######################## Expression evaluation ###########################
 
     # One of the most important methods
     # Evaluates an expression in the context of the slide
@@ -990,7 +1474,12 @@ class slide(object):
             i += 1
 
         # Add the last operand
-        if start_index != None: result.append(expr[start_index:])
+        if start_index != None: 
+            if start_index >= len(expr):
+                # The last operand is missing!
+                return None
+            else:
+                result.append(expr[start_index:])
 
         # Edge case: no operators
         if result == []: return expr
@@ -1000,7 +1489,7 @@ class slide(object):
     # #2 Organize into proper ast format according to operator priority
     # E.g [[2], '+', [2], '*', [2]] => ['+', 2, ['*', 2, 2]]
     def generate_ast(self, expr_list):
-        # Either False or just a string
+        # Either None or just a string
         if type(expr_list) != list: return expr_list
 
         result = expr_list
@@ -1061,6 +1550,10 @@ class slide(object):
         try:
             operand1 = self.eval_expr(ast[1], obj)
             operand2 = self.eval_expr(ast[2], obj)
+
+            if operand1 == None or operand2 == None:
+                return None
+            
             if (operator == '+'): return operand1 + operand2
             elif (operator == '-'): return operand1 - operand2
             elif (operator == '*'): return operand1 * operand2
@@ -1089,6 +1582,7 @@ class slide(object):
 
         index = ast.find(".")
         if index == -1:
+            # print("No . was found")
             object_referenced = obj
             field = ast.upper()
         else:
@@ -1098,37 +1592,40 @@ class slide(object):
             r_bracket = object_name.find("]")
             if l_bracket == -1 and r_bracket == -1:
                 # No brackets are found
+                # print("No brackets are found")
                 object_index = 0
             elif (r_bracket > l_bracket and 
                   l_bracket != -1 and
                   r_bracket == index - 1):
                 object_index = object_name[l_bracket+1:r_bracket]
                 object_name = object_name[:l_bracket]
-                if not is_num_type(object_index): return None
+                # The index might also be an expression
+                object_index = self.eval_expr(object_index, obj)
+
+                if not is_num_type(object_index): 
+                    print("Index is wrong!")
+                    return None
                 object_index = int(object_index)
             else:
+                # print("Something is wrong!")
                 # Something is wrong!
                 return None
             
-            if object_name not in self.object_dict: return None
+            if object_name not in self.object_dict: 
+                # print("Name is wrong")
+                return None
             object_list = self.object_dict[object_name]
 
             if type(object_index) != int or object_index >= len(object_list):
+                # print("Index is still wrong")
                 return None
 
             object_referenced = object_list[object_index]
 
             field = ast[index+1:].upper()
 
-        if field not in object_referenced.fields: return None
+        # if field not in object_referenced.fields: return None
         return object_referenced.get_value(field)
-
-    # Render is specific to slides
-    # Has a more professional feel
-    def render(self, canvas, startx, starty, edit = True, display_ratio = 1):
-        for user_object in self.objects:
-            if edit or user_object.is_visible:
-                user_object.draw(canvas, startx, starty, display_ratio)
 
 # A slibe_btn (aka snapshot) is a button that represents a slide
 class slide_btn(psm_button):
@@ -1221,7 +1718,8 @@ class Presimation(Animation):
 
     # TODO: This is only temporary
     TOOLS = [["Objects",
-                [("CIRCLE", psm_circle_tool())]
+                [("CIRCLE", psm_circle_tool()),
+                 ("RECT", psm_rect_tool())]
              ],
              ["Drawing",
                 []
@@ -1257,7 +1755,7 @@ class Presimation(Animation):
 
         self.tools = self.get_tool_dict()
         # (psm_tool)
-        self.current_tool = SELECTION_TOOL
+        self.current_tool = CLICK_SELECT
 
         # Now we can only select objects one at a time for simplicity's sake
         self.selected_object = None
@@ -1454,7 +1952,7 @@ class Presimation(Animation):
         print(tool_name)
         if tool_name == None:
             print("Tool changed to selection")
-            self.current_tool = SELECTION_TOOL
+            self.current_tool = CLICK_SELECT
         else:
             # substitute it with real functions
             print("Tool changed to ", tool_name)
@@ -1523,7 +2021,7 @@ class Presimation(Animation):
     def key_pressed(self, event):
         if event.keysym.upper() == "D":
             #print("Pressed D")
-            if self.current_tool == SELECTION_TOOL:
+            if self.current_tool == CLICK_SELECT:
                 self.current_tool = COPY_TOOL
         elif event.keysym.upper() == "E":
             pass
@@ -1534,7 +2032,7 @@ class Presimation(Animation):
             #print("Released D")
             if self.current_tool == COPY_TOOL:
                 #self.current_tool.reset()
-                self.current_tool = SELECTION_TOOL
+                self.current_tool = CLICK_SELECT
         elif event.keysym.upper() == "E":
             pass
             #print("Released E")
@@ -1543,7 +2041,9 @@ class Presimation(Animation):
         for GUI_object in self.GUI_objects:
             GUI_object.on_mouse_down(event.x, event.y)
         if self.mode == "EDIT":
-            if (self.current_tool == SELECTION_TOOL
+            # We're dealing with all kinds of different tools
+            # Special case 1: click select or copy tool
+            if (self.current_tool == CLICK_SELECT
                 or self.current_tool == COPY_TOOL):
                 # We are selecting an object
                 # Process the mouse down event for user objects
@@ -1566,6 +2066,44 @@ class Presimation(Animation):
                     copied_object = psm_object.copy(self.selected_object)
                     self.current_tool.on_mouse_down(event.x, event.y, 
                         copied_object)
+            # Special case 2: selection tool
+            # Actually this can totally be merged with case 1
+            elif isinstance(self.current_tool, psm_selection_tool):
+                
+                object_name = self.current_tool.get_object_name()
+                object_name = self.working_slide.generate_object_name(
+                        object_name)
+
+                # We have to see which object the selection tool selects
+                count = len(self.working_slide.objects)
+                # Only one object can be selected with selection tool
+                selected_flag = False
+                selected_name = None
+                for temp in range(count):
+                    index = count - temp - 1
+                    obj = self.working_slide.objects[index]
+
+                    if not selected_flag and obj.in_borders(event.x, event.y):
+                        obj.on_mouse_down(event.x, event.y)
+                        # Grab the name and index
+                        selected_name = obj.get_value("NAME")
+                        selected_index = obj.get_value("INDEX")
+
+                        self.selected_object = obj
+                        selected_flag = True
+                    else:
+                        obj.set_selected(False)
+
+                if not selected_flag:
+                    # Switch back to default tool
+                    self.select_tool(None)
+                else:
+                    self.current_tool.generate_object(object_name, 
+                        self.working_slide, 
+                        selected_name,
+                        selected_index)
+
+            # General case: drawing with a tool to create an object
             else:
                 # The general object names like "Circle" "Line" etc.
                 object_name = self.current_tool.get_object_name()
@@ -1578,25 +2116,28 @@ class Presimation(Animation):
                                                 object_name,
                                                 self.working_slide)
 
+        self.root.focus()
+
     def mouse_up(self, event):
         for GUI_object in self.GUI_objects:
             GUI_object.on_mouse_up(event.x, event.y)
-        if self.current_tool == SELECTION_TOOL:
+        if self.current_tool == CLICK_SELECT:
             for obj in self.working_slide.objects:
                 if obj.is_selected:
                     obj.on_mouse_up(event.x, event.y)
         else:
             new_object = self.current_tool.on_mouse_up(event.x, event.y)
             if new_object != None:
+                new_object.update()
                 self.working_slide.add_object(new_object)
             # Change tool to "selection" every time we use it once
             # The mouseup has to happen inside the workspace
             if psm_tool.in_workspace(event.x, event.y):
-                self.current_tool = SELECTION_TOOL
+                self.current_tool = CLICK_SELECT
 
     def mouse_move(self,event):
         # Selection tool
-        if self.current_tool == SELECTION_TOOL:
+        if self.current_tool == CLICK_SELECT:
             for obj in self.working_slide.objects:
                 # Currently only one object can be selected at a time
                 if obj.is_selected:
@@ -1663,7 +2204,7 @@ class Presimation(Animation):
         if self.current_tool == COPY_TOOL:
             self.root.config(cursor = "hand1")
             self.current_tool.draw_object(self.canvas)
-        elif self.current_tool != SELECTION_TOOL:
+        elif self.current_tool != CLICK_SELECT:
             self.root.config(cursor = "hand2")
             self.current_tool.draw_object(self.canvas)
         else:
