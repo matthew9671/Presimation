@@ -102,7 +102,8 @@ class psm_GUI_object(Rect):
             child.update()
 
     def draw(self, canvas, active_fill = "white"):
-        super().draw(canvas)
+        if self.is_visible:
+            super().draw(canvas)
         for child in self.children:
             child.draw(canvas)
 
@@ -160,7 +161,7 @@ class psm_menu_inputbox(psm_GUI_object):
             if self.text != None: self.text.place_forget()
             self.generated = False
             self.error_displayed = False
-            print("Status changed!")
+            #print("Status changed!")
         self.has_error = value
 
     def update_value(self):
@@ -223,6 +224,7 @@ class psm_button(psm_GUI_object):
         self.chosen = value
 
     def on_click(self):
+        # print("I'm clicked!")
         self.chosen = True
         self.click_func()
 
@@ -412,7 +414,10 @@ class psm_double_click_listener(psm_button):
         return True
 
 # TODO: Write this
-class psm_menu_icon(psm_button): pass
+class psm_menu_icon(psm_button):
+    def on_mouse_down(self, x, y):
+        if self.in_borders(x, y):
+            self.click_func()
 
 class Test(Animation):
     def __init__(self):

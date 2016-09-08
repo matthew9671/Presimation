@@ -2,9 +2,17 @@ from Animation import *
 from interface import *
 import copy
 import math
+import random
 import string
 
 import os
+# shuffle(Selection3,"HEIGHT")
+
+# if(Selection1.[0].[0].HEIGHT>Selection2.[0].[0].HEIGHT);
+# swap(Selection1.[0].[0],Selection2.[0].[0],"LEFT");
+# swap(Selection1.[0],Selection2.[0],"END_INDEX");
+# swap(Selection1.[0],Selection2.[0],"START_INDEX");
+# endif
 
 # From-- *drum roll* STACKOVERFLOW!
 # http://stackoverflow.com/questions/4060221/how-to-reliably-open-a-file-in-the-same-directory-as-a-python-script
@@ -67,9 +75,11 @@ def get_lambda(func, *args):
 def test_func(a, b):
     print(a, b)
 
-def is_num_type(number):
+# Checks if the value matches the correct type
+# For example "1" matches int type
+def is_type(value, type):
     try:
-        result = int(number)
+        result = type(value)
         return True
     except:
         return False
@@ -166,9 +176,9 @@ class psm_field(object):
         # "BASIC" "COLOR" "DIMENSIONS" and so on
         self.tab = "BASIC"
 
-    @classmethod
     # A linear interpolation
     # Returns a value instead of a psm_field object
+    @classmethod
     def interpolate_value(self, from_field, to_field, ratio):
         assert(from_field.value_type == to_field.value_type)
         if from_field.value_type != float:
@@ -178,17 +188,14 @@ class psm_field(object):
             to_value = to_field.get_value()
             return from_value + ratio * (to_value - from_value)
 
-    # Checks if the value is matches the correct type
-    # If it is, convert the value to the type
-    # For example "1" matches int type
-    def type_check(self, value):
-        # From stackoverflow
-        # Lol
-        try:
-            result = self.value_type(value)
-            return result, True
-        except:
-            return None, False
+    # Returns a string that is the reference of this field
+    # E.g. "Circle1[0].CENTER_Y"
+    def get_reference(self):
+        name = self.master.get_value("NAME")
+        index = int(self.master.get_value("INDEX"))
+        field_name = self.name
+
+        return "%s[%d].%s" % (name, index, field_name)
 
     # TODO: Really think through the logic of set_value, set_expression
     # and behavior in case of error
@@ -202,12 +209,14 @@ class psm_field(object):
             return False
 
         # Many times the value is in string format
-        value, passed = self.type_check(value)
+        passed = is_type(value, self.value_type)
         # The value is not of the correct type
         if not passed: 
-            print(value, ": Typecheck failed on " + self.name + 
-                "! Should be ", self.value_type)
+            # print(value, ": Typecheck failed on " + self.name + 
+            #    "! Should be ", self.value_type)
             return False
+
+        value = self.value_type(value)
 
         if (type(value) not in [float, int] 
             or (value <= self.value_max 
@@ -216,8 +225,8 @@ class psm_field(object):
             self.value = value
             if self.is_independent: self.expression = str(value)
         else:
-            print(value, ": Range check failed! Max:%d, Min:%d"
-             % (self.value_max, self.value_min))
+            # print(value, ": Range check failed! Max:%d, Min:%d"
+            #  % (self.value_max, self.value_min))
             # The value inputted is invalid
             return False
 
@@ -226,12 +235,6 @@ class psm_field(object):
             self.inputbox.update_value()
         # Successfully set value
         return True
-
-    def get_value(self):
-        return self.value
-
-    def update(self):
-        if not self.is_independent: self.set_expression(self.expression)
 
     # Input boxes set the expression first
     # Then the expression gets evaluated
@@ -248,9 +251,9 @@ class psm_field(object):
 
         result = self.master.slide.evaluate(expr, self.master)
         if result != None:
-            if is_num_type(expr):
-                print(expr)
-                print("Field", self.name, "becomes independent!")
+            if is_type(expr, float):
+                # print(expr)
+                # print("Field", self.name, "becomes independent!")
                 # If it's just a number the field is independent
                 self.is_independent = True
             else:
@@ -262,48 +265,82 @@ class psm_field(object):
 
             return True
         else:
-            print("Expression:", expr)
-            print("Error evaluating expression in field ", self.name)
+            # print("Expression:", expr)
+            # print("Error evaluating expression in field ", self.name)
             return False
+
+    def get_value(self):
+        return self.value
 
     def get_expression(self):
         return self.expression
 
+    def get_input_box(self):
+        return self.inputbox.text
+
+    # Update the actual value of the field if the field has an expression
+    def update(self):
+        if not self.is_independent: 
+            self.set_expression(self.expression)
+            # print("Field", self.name, "updated!")
+
     def set_icon(self, icon):
         self.icon = icon
+
+    # Handy method
+    # Removes the expression on the field (value stays the same)
+    # Making the field independent
+    def break_dependence(self):
+        self.expression = str(self.value)
+        self.is_independent = True
 
 class psm_menu(psm_GUI_object):
 
     # Light orange
     BG_COLOR_NORMAL = rgbString(237, 171, 113)
 
-    def __init__(self, attributes_dict):
+    def __init__(self, master):
         self.is_visible = False
         self.current_tab = "BASIC"
-        self.attributes = attributes_dict
+        self.master = master
+        self.attributes = master.attributes
+        # Type dict<string, list<list<psm_field>>>
         self.tabs = dict()
-        for field in attributes_dict.values():
+        # Type dict<string, psm_GUI_object>
+        self.panels = dict()
+        for field in self.attributes.values():
             tab = field.tab
             # print(tab, field)
             if tab not in self.tabs.keys():
                 self.tabs[tab] = []
             if not field.is_hidden:
                 pos = field.position
-                insert_field_in_2d_array(self.tabs[tab], field, pos)
+                if pos != None: 
+                    # None indicates that the field is hidden on the menu
+                    insert_field_in_2d_array(self.tabs[tab], field, pos)
         # Create the corresponding GUI items for each field
         self.init_items()
 
     def init_items(self):
-        self.panels = dict()
         for tab in self.tabs.keys():
             # An invisible panel to hold all the buttons
-            panel = psm_GUI_object(0,0,0,0)
+            width, height = self.get_dimensions()
+            x, y = self.master.get_menu_position()
+            panel = psm_GUI_object(x,y,x+width,y+height)
+            # We don't want to draw it
+            panel.is_visible = False
             for row in range(len(self.tabs[tab])):
                 for col in range(len(self.tabs[tab][row])):
                     # Type <psm_field>
                     item = self.tabs[tab][row][col]
                     x1, y1 = self.get_item_topleft_position(row, col)
                     # TODO: I guess we can put more of this into the class
+                    center_x = x1 + psm_field.ICON_SIZE / 2
+                    center_y = y1 + psm_field.ICON_SIZE / 2
+                    grab_func = get_lambda(self.master.toggle_grab, 
+                                           True, item.name, 
+                                           (center_x, center_y))
+
                     item.button = psm_menu_icon(x1,
                                            y1,
                                            x1 + psm_field.ICON_SIZE,
@@ -311,7 +348,8 @@ class psm_menu(psm_GUI_object):
                                            image = item.icon,
                                            color = None,
                                            parent = panel,
-                                           border = 0)
+                                           border = 0,
+                                           click_func = grab_func)
                     item.inputbox = psm_menu_inputbox(x1 + psm_field.ICON_SIZE+\
                                     psm_field.ICON_BOX_SPACING,
                                     y1,
@@ -358,6 +396,7 @@ class psm_menu(psm_GUI_object):
             left += psm_field.ITEM_SPACING
         return left, top
 
+    # Returns width, height of the menu
     def get_dimensions(self):
         rows = len(self.tabs[self.current_tab])
         max_width = 0
@@ -375,6 +414,35 @@ class psm_menu(psm_GUI_object):
         height += psm_field.MARGIN + psm_field.ICON_SIZE
 
         return max_width, height
+
+    # Returns a field for which (x, y) is in the borders of its icon button
+    # Returns None if no such field is found
+    def get_field(self, x, y):
+        curr_tab = self.tabs[self.current_tab]
+        rows = len(curr_tab)
+
+        for row in range(rows):
+            for col in range(len(curr_tab[row])):
+                field = curr_tab[row][col]
+                if field.button.in_borders(x, y):
+                    return field
+
+        return None
+
+    def in_borders(self, x, y):
+        return self.panels[self.current_tab].in_borders(x, y)
+
+    def on_mouse_down(self, x, y):
+        self.panels[self.current_tab].on_mouse_down(x, y)
+
+    def on_mouse_up(self, x, y):
+        self.panels[self.current_tab].on_mouse_up(x, y)
+
+    def on_mouse_move(self, x, y):
+        self.panels[self.current_tab].on_mouse_move(x, y)
+
+    def update(self):
+        self.panels[self.current_tab].update()
 
     def draw(self, canvas, startx, starty):
         width, height = self.get_dimensions()
@@ -396,6 +464,42 @@ class psm_object(object):
 
     select_color = "orange"
 
+################################ Class methods #################################
+
+    @classmethod
+    def copy(self, instance, master = None):
+        if master == None: master = instance.slide
+        # First make a copy with some aliasing
+        result = copy.copy(instance)
+        result.fields = copy.copy(instance.fields)
+        result.attributes = dict()
+        for key in instance.attributes.keys():
+            field = copy.copy(instance.attributes[key])
+            # Change the field's master
+            field.master = result
+            result.attributes[key] = field
+        # This might require fixing
+        result.handle_holder = psm_GUI_object(0,0,0,0)
+        result.generate_handles()
+        result.menu = psm_menu(result)
+        result.dbclick_listener = psm_double_click_listener(result.toggle_menu)
+        result.master = master
+        return result
+
+    # Returns a psm_object that is in between of two objects
+    # This interpolation is linear
+    @classmethod
+    def interpolate(self, from_object, to_object, ratio):
+        result = psm_object.copy(from_object, from_object.master)
+        for name in result.fields:
+            from_field = from_object.attributes[name]
+            to_field = to_object.attributes[name]
+            value = psm_field.interpolate_value(from_field, to_field, ratio)
+            result.set_value(name, value)
+        return result
+
+################################ Initialization ################################
+
     def __init__(self, name, slide):
         # The slide that the object lives in
         self.slide = slide
@@ -414,12 +518,12 @@ class psm_object(object):
         self.mouse_on = False
         self.is_selected = False
         self.menu_on = False
-        # We'll generate the corresponding menu in the specific classes
-        self.menu = None
 
         # TODO: These can be further specified
-        name_field = psm_field("NAME", self, position = [0,0], value_type = str)
-        index_field = psm_field("INDEX", self, position = [0,1])
+        name_field = psm_field("NAME", self, position = [0,0], 
+                                             value_type = str)
+        index_field = psm_field("INDEX", self, position = [0,1], 
+                                               value_type = int)
         self.attributes["NAME"] = name_field
         self.attributes["INDEX"] = index_field
 
@@ -427,48 +531,35 @@ class psm_object(object):
         self.set_value("NAME", name)
         self.set_value("INDEX", 0)
 
-        self.menu = psm_menu(self.attributes)
+        # Menu stuff
+        self.menu = psm_menu(self)
+        self.is_grabbing = False
+        self.grab_field_name = None
+
         # Generate the handles(control points)(type: psm_button)
         # for the user to manipulate the object
         self.handle_holder = psm_GUI_object(0,0,0,0)
         self.handles = None
 
-    @classmethod
-    def copy(self, instance, master = None):
-        if master == None: master = instance.slide
-        # First make a copy with some aliasing
-        result = copy.copy(instance)
-        result.fields = copy.copy(instance.fields)
-        result.attributes = dict()
-        for key in instance.attributes.keys():
-            field = copy.copy(instance.attributes[key])
-            # Change the field's master
-            field.master = result
-            result.attributes[key] = field
-        # This might require fixing
-        result.handle_holder = psm_GUI_object(0,0,0,0)
-        result.generate_handles()
-        result.menu = psm_menu(result.attributes)
-        result.dbclick_listener = psm_double_click_listener(result.toggle_menu)
-        result.master = master
-        return result
-
-    @classmethod
-    # Returns a psm_object that is in between of two objects
-    # This interpolation is linear
-    def interpolate(self, from_object, to_object, ratio):
-        result = psm_object.copy(from_object, from_object.master)
-        for name in result.fields:
-            from_field = from_object.attributes[name]
-            to_field = to_object.attributes[name]
-            value = psm_field.interpolate_value(from_field, to_field, ratio)
-            result.set_value(name, value)
-        return result
-
     def toggle_menu(self):
         #print("Menu on!")
         self.menu_on = True
         self.menu.is_visible = True
+
+    def toggle_grab(self, value, field_name = None, start_pos = None):
+        if value:
+            self.is_grabbing = True
+            self.grab_field_name = field_name
+            self.grab_start = start_pos
+        else:
+            self.is_grabbing = False
+            self.grab_field_name = None
+            self.grab_start = None
+
+    def insert_expression_to_field(self, expr):
+        assert(self.grab_field_name != None)
+        field = self.attributes[self.grab_field_name]
+        field.get_input_box().insert(INSERT, expr)
 
     def update_fields(self):
         for field in self.fields:
@@ -490,15 +581,26 @@ class psm_object(object):
 
     def get_value(self, field):
         if field not in self.fields:
-            print(
-            "Field \"" + field + "\" does not belong to object!")
+            # print(
+            # "Field \"" + field + "\" does not belong to object!")
             return None
         else:
             return self.attributes[field].get_value()
 
-    # Returns true if point (x,y) counts as "on" the object
+    # Returns true if point (x,y) (global) counts as "on" the object
     def in_borders(self, x, y): pass
 
+    # If the object's menu isn't turned on, return false
+    # Returns true if point (x,y) (global) counts as "on" the object's menu
+    def in_menu_borders(self, x, y):
+        if not self.menu_on: return False
+
+        x0, y0 = self.get_menu_position()
+        w, h = self.menu.get_dimensions()
+        return (x > x0 and x < x0 + w
+            and y > y0 and y < y0 + h)
+
+    # Returns the top left corner of the menu in global coordinates
     def get_menu_position(self): pass
 
     # Change an object's center to x, y in the global coordinates
@@ -512,6 +614,24 @@ class psm_object(object):
         self.update_fields()
         self.update_handles()
 
+################################# PSM methods ##################################
+
+    # Swap values of a certain field with another object
+    # Ok if two objects are not of the same type
+    @classmethod
+    def swap(self, object1, object2, field):
+        if field not in object1.fields or field not in object2.fields:
+            return False
+        object1.attributes[field].break_dependence()
+        object2.attributes[field].break_dependence()
+        value1 = object1.get_value(field)
+        value2 = object2.get_value(field)
+        object1.set_value(field, value2)
+        object2.set_value(field, value1)
+        return True
+
+################################ System events #################################
+
     def on_mouse_down(self, x, y):
         # The mainloop calls mouse_down
         # only when the object is being clicked upon
@@ -523,13 +643,18 @@ class psm_object(object):
             self.handle_holder.on_mouse_down(x, y)
         else:
             self.is_selected = True
+        self.update_fields()
 
     def on_mouse_up(self, x, y):
         self.handle_holder.on_mouse_up(x, y)
         self.dbclick_listener.on_mouse_up(x, y)
 
+    # The update function is where the object can 
+    # "contact" the mainloop directly
     def update(self):
         self.dbclick_listener.update()
+        if self.is_grabbing:
+            return self
 
     # Useful when we are drag-selecting objects
     def set_selected(self, value):
@@ -567,7 +692,8 @@ class psm_object(object):
                 """Comparing an instance of psm_object with another object""")
         # We might change this if we allow object aliases
         # i.e. two objects that have the same name and index
-        return self.name == other.name and self.index == other.index
+        return (self.get_value("NAME") == other.get_value("NAME")
+            and self.get_value("INDEX") == other.get_value("INDEX"))
 
     def __hash__(self, other):
         return hash(self.get_hashables())
@@ -636,8 +762,6 @@ class psm_circle(psm_object):
         rim_handle = psm_object_handle(-r, 0,
             return_func = self.change_radius,
             parent = self.handle_holder)
-        print("Holder:", self.handle_holder.get_center())
-        print("Rim:", rim_handle.get_center())
         self.handles = [center_handle, rim_handle]
 
     def update_handles(self, dx = None, dy = None):
@@ -656,7 +780,9 @@ class psm_circle(psm_object):
             holder_x, holder_y = self.handle_holder.get_center()
             x, y = global_x - holder_x, global_y - holder_y
             prev_r = (x ** 2 + y ** 2) ** 0.5
-            if prev_r == 0: print(global_x, global_y, dx, dy)
+            if prev_r == 0: 
+                pass
+                #print(global_x, global_y, dx, dy)
             assert(prev_r != 0)
         else:
             prev_r = (dx ** 2 + dy ** 2) ** 0.5
@@ -678,10 +804,6 @@ class psm_circle(psm_object):
         center_x = self.get_value("CENTER_X")
         center_y = self.get_value("CENTER_Y")
         self.update_handles(x - center_x, y - center_y)
-
-    def on_mouse_down(self, x, y):
-        super().on_mouse_down(x, y)
-        #print("Object %s Selected" % self.get_value("NAME"))
 
     def draw(self, canvas, startx, starty, ratio = 1):
         center_x = self.get_value("CENTER_X")
@@ -920,13 +1042,18 @@ class psm_object_abstract(psm_object):
     ICON_SIZE = 30
     MARGIN = 10
     BORDER_WIDTH = 4
-    FILL_NORMAL = "cyan"
-    FILL_SELECTED = "blue"
 
-    def __init__(self, name, slide, img):
+    def __init__(self, name, slide, img_name, fill_normal, fill_selected):
         self.fields.extend(["CENTER_X", "CENTER_Y"])
         super().__init__(name, slide)
+        
+        # Appearance
+        img_file = os.path.join(__location__, 
+                            "../Images/Abstract Objects/" + img_name)
+        img = PhotoImage(file = img_file)
         self.img = img
+        self.fill_normal = fill_normal
+        self.fill_selected = fill_selected
         self.is_visible = False
 
     def in_borders(self, x, y):
@@ -954,12 +1081,9 @@ class psm_object_abstract(psm_object):
     def set_value(self, field_name, value):
         result = super().set_value(field_name, value)
         if field_name == "INDEX":
-            print("Dectect set_value on index")
-            print("value =", value)
             # The icons representing abstract objects are arranged in a certain way
             x, y = self.slide.get_abstract_icon_pos(self.get_value("NAME"),
                                                     value)
-            print(x, y)
             self.set_value("CENTER_X", x)
             self.set_value("CENTER_Y", y)
 
@@ -974,9 +1098,9 @@ class psm_object_abstract(psm_object):
             half_size = psm_object_abstract.ICON_SIZE / 2
 
             if self.is_selected:
-                fill_color = psm_object_abstract.FILL_SELECTED
+                fill_color = self.fill_selected
             else:
-                fill_color = psm_object_abstract.FILL_NORMAL
+                fill_color = self.fill_normal
 
             canvas.create_rectangle(x - half_size,
                                     y - half_size,
@@ -991,15 +1115,16 @@ class psm_object_abstract(psm_object):
 class psm_selection(psm_object_abstract):
 
     IMAGE = "selection.gif"
+    FILL_NORMAL = "cyan"
+    FILL_SELECTED = "blue"
     MARGIN = 20
     BORDER_WIDTH = 2
 
     def __init__(self, name, slide):
-        img_file = os.path.join(__location__, 
-                            "../Images/Abstract Objects/" + psm_selection.IMAGE)
-        img = PhotoImage(file = img_file)
         self.fields = ["TARGET_NAME", "START_INDEX", "END_INDEX"]
-        super().__init__(name, slide, img)
+        super().__init__(name, slide, psm_selection.IMAGE, 
+                                      psm_selection.FILL_NORMAL, 
+                                      psm_selection.FILL_SELECTED)
         # A list of objects with the same name
         self.selected_object = None
 
@@ -1018,13 +1143,14 @@ class psm_selection(psm_object_abstract):
                 value_type = int
             else:
                 value_type = float
+
             self.attributes[field_name] = psm_field(field_name, self,
                                                     position = position, 
                                                     value_type = value_type)
 
     def get_bounding_box(self):
         if self.selected_object == None:
-            print("Nothing selected!")
+            #print("Nothing selected!")
             return None
         else:
             # Find the smallest bounding box 
@@ -1048,8 +1174,35 @@ class psm_selection(psm_object_abstract):
         margin = psm_selection.MARGIN
         return x1 - margin, y1 - margin, x2 + margin, y2 + margin
 
+################################# PSM methods ##################################
+
+    # Shuffle values of a certain field in selection
+    # Side effect is breaking the dependence of the fields
+    @classmethod
+    def shuffle_field(self, obj, field):
+        if (obj.selected_object == None or 
+            field not in obj.selected_object[0].fields):
+            return False
+
+        start = obj.get_value("START_INDEX")
+        end = obj.get_value("END_INDEX")
+
+        values = []
+        for i in range(start, end):
+            selected_obj = obj.selected_object[i]
+            selected_obj.attributes[field].break_dependence()
+            values.append(selected_obj.get_value(field))
+
+        random.shuffle(values)
+        for i in range(end - start):
+            selected_obj = obj.selected_object[i + start]
+            selected_obj.set_value(field, values[i])
+
+        return True
+
+############################ Events & get-set functions ########################
+
     def update(self):
-        super().update()
         target = self.get_value("TARGET_NAME")
         start = self.get_value("START_INDEX")
         end = self.get_value("END_INDEX")
@@ -1060,9 +1213,13 @@ class psm_selection(psm_object_abstract):
          or start < 0
          or start >= end):
             self.selected_object = None
-            return
         else:
             self.selected_object = object_list
+            self.first_object = object_list[start]
+            if self.is_selected:
+                for i in range(start, end):
+                    self.selected_object[i].set_selected(True)
+        return super().update()
 
     # If you want to get an attribute of the selection itself
     # use selection.[field name]
@@ -1073,7 +1230,9 @@ class psm_selection(psm_object_abstract):
         left_bracket = field.find("[")
         if left_bracket == -1: 
             result = super().get_value(field)
-            if result == None: print("No left bracket")
+            if result == None: 
+                pass
+                #print("No left bracket")
             return result
         elif left_bracket == 0:
             right_bracket = field.find("]")
@@ -1081,22 +1240,31 @@ class psm_selection(psm_object_abstract):
             index = self.slide.evaluate(index, self)
             # TODO: Revise this
             field = field[right_bracket+2:]
-            if type(index) != int:
-                print("Weird index")
+            if not is_type(index, int):
+                #print("Weird index:", type(index))
                 return None
 
             index += self.get_value("START_INDEX")
+            # Due to a type complication, index can be a float...
+            index = int(index)
+
             if self.selected_object == None:
-                print("No objects")
+                #print("No objects")
                 return None
             elif index >= self.get_value("END_INDEX"):
-                print("Index out of bound")
+                #print("Index out of bound")
                 return None
             else:
-                print("field:", field)
-                return self.selected_object[index].get_value(field)
+                #print("field:", field)
+                if field == "":
+                    #print("Got object itself!")
+                    # We want the object itself
+                    return self.selected_object[index]
+                else:
+                    return self.selected_object[index].get_value(field)
         else:
-            print("Something's reaaly wrong")
+            pass
+            #print("Something's realy wrong")
 
     def draw(self, canvas, startx, starty, ratio = 1):
         # Selection object only appears at edit mode
@@ -1117,7 +1285,105 @@ class psm_selection(psm_object_abstract):
                 width = psm_selection.BORDER_WIDTH,
                 dash = (2, 4))
 
-class psm_timer(psm_object_abstract): pass
+class psm_variable(psm_object_abstract):
+
+    IMAGE = "variable.gif"
+    FILL_NORMAL = "orange"
+    FILL_SELECTED = "red"
+
+    def __init__(self, name, slide):
+        self.fields = ["VALUE"]
+        super().__init__(name, slide, psm_variable.IMAGE, 
+                                      psm_variable.FILL_NORMAL, 
+                                      psm_variable.FILL_SELECTED)
+
+    def init_attributes(self):
+        # Only temporary
+        # Finally we will have to customize each of the fields
+        fields_per_row = 3
+        # Start with 2 since name and index are always the first 2
+        # Only counts non-hidden fields
+        count = 2
+        for i in range(2, len(self.fields)):
+            field_name = self.fields[i]
+            if field_name in ["CENTER_X", "CENTER_Y"]:
+                # CENTER_X and CENTER_Y are hidden in abstract objects
+                position = None
+            else:
+                position = [count // fields_per_row,
+                            count % fields_per_row]
+                count += 1
+            value_type = float
+            self.attributes[field_name] = psm_field(field_name, self,
+                                                    position = position, 
+                                                    value_type = value_type)
+
+# One of the most important objects in programming
+# Basically this abstract object represents a for loop
+class psm_timer(psm_object_abstract):
+    IMAGE = "timer.gif"
+    FILL_NORMAL = "grey"
+    FILL_SELECTED = "white"
+
+    def __init__(self, name, slide):
+        self.fields = ["START_TIME", "TIME", "TICKS", "INTERVAL", "EVENT"]
+        super().__init__(name, slide, psm_timer.IMAGE, 
+                                      psm_timer.FILL_NORMAL, 
+                                      psm_timer.FILL_SELECTED)
+
+    def init_attributes(self):
+        # Only temporary
+        # Finally we will have to customize each of the fields
+        fields_per_row = 3
+        # Start with 2 since name and index are always the first 2
+        # Only counts non-hidden fields
+        count = 2
+        for i in range(2, len(self.fields)):
+            field_name = self.fields[i]
+            if field_name in ["CENTER_X", "CENTER_Y"]:
+                # CENTER_X and CENTER_Y are hidden in abstract objects
+                position = None
+                value_type = float
+            else:
+                position = [count // fields_per_row,
+                            count % fields_per_row]
+                count += 1
+                if field_name in ["EVENT"]:
+                    value_type = str
+                else:
+                    value_type = int
+            self.attributes[field_name] = psm_field(field_name, self,
+                                                    position = position, 
+                                                    value_type = value_type)
+
+    def trigger_event(self):
+        commands = self.get_value("EVENT")
+        #print("Lights go out and I can't be saved")
+        self.slide.run_commands(commands, self)
+
+    def update_fields(self):
+        time = self.get_value("TIME")
+        start_time = self.get_value("START_TIME")
+        interval = self.get_value("INTERVAL")
+        assert(interval != 0)
+        ticks = self.get_value("TICKS")
+
+        curr_time = self.slide.get_index()
+
+        if curr_time != time:
+            # Time has moved on!
+            curr_ticks = (curr_time - start_time) / interval
+            if curr_ticks != ticks:
+                # The clock ticks!
+                self.set_value("TICKS", curr_ticks)
+                # When the event triggers is very important!
+                self.trigger_event()
+
+            self.set_value("TIME", curr_time)
+
+        for field in self.fields:
+            if field not in ["TICKS", "TIME"]:
+                self.attributes[field].update()
 
 # Tools respond to mouse events and creates corresponding objects
 # and returns them to the mainloop
@@ -1205,7 +1471,7 @@ class psm_copy_tool(psm_tool):
         super().__init__("Copy tool", None)
 
     def reset(self):
-        print("RESET!")
+        #print("RESET!")
         # lol
         self.on_mouse_up(0, 0)
 
@@ -1215,7 +1481,7 @@ class psm_copy_tool(psm_tool):
     def on_mouse_down(self, x, y, obj):
         super().on_mouse_down(x, y, None)
         if obj != None:
-            print("Copied object!")
+            #print("Copied object!")
             self.current_object = obj
             object_x = obj.get_value("CENTER_X")
             object_y = obj.get_value("CENTER_Y")
@@ -1300,22 +1566,60 @@ class psm_selection_tool(psm_tool):
         self.current_object.set_value("START_INDEX", index)
         self.current_object.set_value("END_INDEX", index + 1)
 
+# These two tools are essentially the same
+class psm_variable_tool(psm_tool):
+    def __init__(self):
+        super().__init__(tool_name = "Create variable", 
+            object_name = "Var")
+
+    def generate_object(self, object_name, slide):
+        self.current_object = psm_variable(object_name, slide)
+
+class psm_timer_tool(psm_tool):
+    def __init__(self):
+        super().__init__(tool_name = "Create timer", 
+            object_name = "Timer")
+        self.default_values = {
+            "INTERVAL": 1
+        }
+
+    def generate_object(self, object_name, slide):
+        self.current_object = psm_timer(object_name, slide)
+        for field in self.default_values:
+            self.current_object.set_value(field, self.default_values[field])
+        self.current_object.set_value("START_TIME", slide.get_index())
+
 # A slide is a set of user objects
 # It holds methods like generate_name 
 # which finds an appropriate name for a new object in the slide
+# It is also responsible for evaluation of expressions
+# and running codes
 class slide(object):
 
-    OPERATORS = ["+", "-", "*", "/", "^", "%"]
+    OPERATORS = ["+", "-", "*", "/", "^", "%", ">", "<"]
     OPERATOR_PRIORITIES = [["^"],
                            ["*", "/", "%"],
-                           ["+", "-"]]
+                           ["+", "-"],
+                           [">", "<"]]
+
+######################### Initialization and stuff #############################
 
     def __init__(self):
-        # Debug only
-        # self.test_eval()
+        self.functions = {"SWAP": psm_object.swap,
+            "SHUFFLE": psm_selection.shuffle_field,
+            "IF": self.if_statement,
+            "ENDIF": self.end_if}
 
+        # Debug only
+        #self.test_eval()
+
+        # The "time" of the slide
+        self.index = 0
         self.objects = []
         self.object_dict = dict()
+
+        # Interpreter stuff
+        self.process_code = True
 
     def test_eval(self):
         print("Testing Parse()...")
@@ -1324,7 +1628,9 @@ class slide(object):
         print(self.parse("(1+2)*(3+4)"))
         print(self.parse("(1+(2+3)*(4))"))
         print("Testing Evaluate()...")
-        print(self.evaluate("10+", None))
+        #print(self.evaluate("10+", None))
+        print("0=", end = "")
+        print(self.evaluate("0", None))
         print("1+2+3+4=", end = "")
         print(self.evaluate("1+2+3+4", None))
         print("(1+(2+3)*(4))=", end = "")
@@ -1334,10 +1640,11 @@ class slide(object):
     @classmethod
     def copy(self, instance):
         result = slide()
+        result.index = instance.index
         for obj in instance.objects:
             obj_copy = psm_object.copy(obj, result)
             result.add_object(obj_copy)
-            print(obj.get_value("NAME"))
+            #print(obj.get_value("NAME"))
         return result
 
     @classmethod
@@ -1354,6 +1661,15 @@ class slide(object):
                 obj = psm_object.interpolate(from_object, to_object, ratio)
                 result.add_object(obj)
         return result
+
+    def get_index(self):
+        return self.index
+
+    def set_index(self, value):
+        self.index = index
+
+    def increment_index(self):
+        self.index += 1
 
     def add_object(self, user_object):
         self.objects.append(user_object)
@@ -1377,8 +1693,16 @@ class slide(object):
         return temp_name
 
     def update(self):
+        grab_object = None
         for obj in self.objects:
-            obj.update()
+            result = obj.update()
+            if result != None: grab_object = result
+        # Only one object should be able to activate grab mode
+        return grab_object
+
+    def update_all_fields(self):
+        for obj in self.objects:
+            obj.update_fields()
 
     # Get the series of objects by name
     # Returns List<psm_object>
@@ -1407,6 +1731,16 @@ class slide(object):
              psm_object_abstract.ICON_SIZE * (index + 0.5))
         return x, y
 
+    # Display all the menus in the slide in edit mode
+    def draw_menus(self, canvas):
+        result = []
+        for obj in self.objects:
+            if obj.menu_on and obj.menu != None:
+                x, y = obj.get_menu_position()
+                obj.menu.draw(canvas, x, y)
+                result.append(obj.menu)
+        return result
+
     # Render is specific to slides
     # Has a more professional feel
     def render(self, canvas, startx, starty, edit = True, display_ratio = 1):
@@ -1414,7 +1748,7 @@ class slide(object):
             if edit or user_object.is_visible:
                 user_object.draw(canvas, startx, starty, display_ratio)
 
-######################## Expression evaluation ###########################
+########################### Expression evaluation ##############################
 
     # One of the most important methods
     # Evaluates an expression in the context of the slide
@@ -1560,6 +1894,8 @@ class slide(object):
             elif (operator == '/'): return operand1 / operand2
             elif (operator == '^'): return operand1 ** operand2
             elif (operator == '%'): return operand1 % operand2
+            elif (operator == '<'): return operand1 < operand2
+            elif (operator == '>'): return operand1 > operand2
             else: raise Exception("wnkn opreator: " + operator)
         except Exception as error:
             raise Exception(
@@ -1567,8 +1903,8 @@ class slide(object):
 
     def eval_expr(self, ast, obj):
         if ast == None: return None
-        if (is_num_type(ast)):
-            return int(ast)
+        if (is_type(ast, float)):
+            return float(ast)
         elif (type(ast) == list):
             return self.eval_list(ast, obj)
         elif (type(ast) == str):
@@ -1577,16 +1913,25 @@ class slide(object):
             raise Exception("Unknown stuff or thing: " + str(ast) )
 
     def eval_str(self, ast, obj):
-        if ast == None:
+        if ast == None or ast == "":
             return None
 
+        if ast[0] == "\"" and ast[-1] == "\"":
+            # We're dealing with an actuall string here!
+            return ast[1:-1]
+
         index = ast.find(".")
-        if index == -1:
+        if index == -1 and ast in obj.fields:
             # print("No . was found")
             object_referenced = obj
             field = ast.upper()
         else:
-            object_name = ast[:index]
+            # If it is -1 then we might be dealing with an object reference
+            # So we are using the whole string
+            if index != -1:
+                object_name = ast[:index]
+            else:
+                object_name = ast
             # Find the index of the object
             l_bracket = object_name.find("[")
             r_bracket = object_name.find("]")
@@ -1602,8 +1947,8 @@ class slide(object):
                 # The index might also be an expression
                 object_index = self.eval_expr(object_index, obj)
 
-                if not is_num_type(object_index): 
-                    print("Index is wrong!")
+                if not is_type(object_index, int): 
+                    #print("Index is wrong!")
                     return None
                 object_index = int(object_index)
             else:
@@ -1622,10 +1967,61 @@ class slide(object):
 
             object_referenced = object_list[object_index]
 
-            field = ast[index+1:].upper()
+            if index != -1:
+                field = ast[index+1:].upper()
+            else:
+                field = None
 
+        # We're returning the object itself
+        if field == None:
+            return object_referenced
+
+        #print("All good!")
         # if field not in object_referenced.fields: return None
         return object_referenced.get_value(field)
+
+################################ Running code ##################################
+
+    def if_statement(self, value):
+        if value == 0:
+            self.process_code = False
+        else: 
+            self.process_code = True
+
+    def end_if(self):
+        self.process_code = True
+
+    # We're basically running a piece of code
+    # But let's just call them commands to make them look simpler
+    def run_commands(self, code, obj):
+        # Get rid of all white space
+        commands = ''.join(code.split())
+        commands = commands.split(";")
+        for command in commands:
+            #print(command)
+            if command != "":
+                # We're calling a function
+                # It has to start with a function name (for now)
+                left_paren = command.find("(")
+                right_paren = command.rfind(")")
+                if left_paren != -1 and self.process_code:
+                    function_name = command[:left_paren].upper()
+                    argument_string = command[left_paren + 1:right_paren]
+                    arguments = argument_string.split(",")
+                    # Turn the list of arguments(strings) into actual values
+                    argument_values = []
+                    for argument in arguments:
+                        result = self.evaluate(argument, obj)
+                        #print(argument, result)
+                        if result == None: 
+                            print("Error running code!")
+                            return
+                        argument_values.append(result)
+                    self.functions[function_name](*argument_values)
+                elif left_paren == -1 and not self.process_code:
+                    function_name = command.upper()
+                    self.functions[function_name]()
+        self.process_code = True
 
 # A slibe_btn (aka snapshot) is a button that represents a slide
 class slide_btn(psm_button):
@@ -1725,15 +2121,19 @@ class Presimation(Animation):
                 []
              ],
              ["Animation", 
-                [("SELECTION", psm_selection_tool())]
+                [("VARIABLE", psm_variable_tool()),
+                 ("SELECTION", psm_selection_tool()),
+                 ("TIMER", psm_timer_tool())]
              ]
             ]
 
 ################################ initialization ################################
 
-    def __init__(self, width, height):
+    def __init__(self, width, height, run = True):
         self.width = width
         self.height = height
+        # Just for convenience
+        self.mouse_pos = (0, 0)
 
         # (int) The index of the slide selected
         # At the start there are no slides saved
@@ -1743,6 +2143,9 @@ class Presimation(Animation):
         # We might not need this -- we can just let objects draw their own menus
         # The list of menus currently opened
         self.menus = []
+        self.temp_object = None
+        # Hmmm... The menu that is temporarily opened in grab mode
+        self.temp_menu = None
         
         # The list of slides created
         self.slides = []
@@ -1759,18 +2162,24 @@ class Presimation(Animation):
 
         # Now we can only select objects one at a time for simplicity's sake
         self.selected_object = None
+        # This indicates if we are in grab mode
+        # Where we can grab another field's handle 
+        # simply by dragging to the field icon
+        self.in_grab_mode = False
+        self.grab_object = None
 
         ####################
         # Animation stuff
         ####################
         self.time = 0
-        self.slide_time_interval = 50
+        self.slide_time_interval = 20
         # "EDIT" "PLAYBACK"
         self.mode = "EDIT"
 
         # There is an a reason we have to do this
         self.is_initializing = True
-        self.run(width, height)
+        if run:
+            self.run(width, height)
 
     def get_tool_dict(self):
         tool_dict = dict()
@@ -1977,7 +2386,12 @@ class Presimation(Animation):
     # Generates a new slide and a snapshot(a button that represents the slide)
     def take_snapshot(self):
         i = len(self.snapshots)
-        self.slides.append(slide.copy(self.working_slide))
+        new_slide = slide.copy(self.working_slide)
+        # Time moves forward
+        self.working_slide.increment_index()
+        self.working_slide.update_all_fields()
+
+        self.slides.append(new_slide)
         width = slide_btn.WIDTH
         height = slide_btn.HEIGHT
         # This is the center coordinate, not top-left
@@ -1991,7 +2405,6 @@ class Presimation(Animation):
                 parent = self.timeline)
             )
         self.current_slide = i
-        self.slides
         self.update_snapshots()
 
 ########################### other helper functions #############################
@@ -2014,6 +2427,27 @@ class Presimation(Animation):
                     / self.slide_time_interval)
         return slide_index, ratio
 
+    # Returns the first object for which the coordinates x, y is in borders
+    # Returns None if no such object was found
+    def get_object(self, x, y):
+        count = len(self.working_slide.objects)
+        # Only one object can be selected with a mouse click
+        selected_flag = False
+        for temp in range(count):
+            # Loop backwards because newer objects are on top of older ones
+            index = count - temp - 1
+            obj = self.working_slide.objects[index]
+
+            if obj.in_borders(x, y):
+                return obj
+        # No such object was found
+        return None
+
+    # Deselect all the objects in the working slide
+    def deselect_all(self):
+        for obj in self.working_slide.objects:
+            obj.set_selected(False)
+
 ############################### system events ##################################
 
     # There is an inexplicable bug
@@ -2023,8 +2457,8 @@ class Presimation(Animation):
             #print("Pressed D")
             if self.current_tool == CLICK_SELECT:
                 self.current_tool = COPY_TOOL
-        elif event.keysym.upper() == "E":
-            pass
+        elif event.keysym.upper() == "R":
+            self.__init__(SCREEN_WIDTH, SCREEN_HEIGHT, run = False)
             #print("Pressed E")
 
     def key_released(self, event):
@@ -2040,33 +2474,38 @@ class Presimation(Animation):
     def mouse_down(self, event):
         for GUI_object in self.GUI_objects:
             GUI_object.on_mouse_down(event.x, event.y)
+        
+        for menu in self.menus:
+            menu.on_mouse_down(event.x, event.y)
+
         if self.mode == "EDIT":
             # We're dealing with all kinds of different tools
-            # Special case 1: click select or copy tool
+        # Special case 1: click select or copy tool
             if (self.current_tool == CLICK_SELECT
                 or self.current_tool == COPY_TOOL):
+                # Check if we are clicking on the menu of the selected object
+                if self.selected_object != None:
+                    if self.selected_object.in_menu_borders(event.x, event.y):
+                        assert(self.selected_object.menu != None)
+                        self.selected_object.menu.on_mouse_down(event.x, 
+                                                                event.y)
+                        # We don't need to do anything else
+                        return
                 # We are selecting an object
-                # Process the mouse down event for user objects
-                count = len(self.working_slide.objects)
-                # Only one object can be selected with a mouse click
-                selected_flag = False
-                for temp in range(count):
-                    index = count - temp - 1
-                    obj = self.working_slide.objects[index]
-
-                    if not selected_flag and obj.in_borders(event.x, event.y):
-                        obj.on_mouse_down(event.x, event.y)
-                        self.selected_object = obj
-                        selected_flag = True
-                    else:
-                        obj.set_selected(False)
-                if self.current_tool == COPY_TOOL and selected_flag:
+                self.deselect_all()
+                result = self.get_object(event.x, event.y)
+                if result != None:
+                    self.selected_object = result
+                    result.set_selected(True)
+                    result.on_mouse_down(event.x, event.y)
+                # Copy tool specific
+                if self.current_tool == COPY_TOOL and result != None:
                     self.selected_object.set_selected(False)
                     # This is where the object actually gets copied
                     copied_object = psm_object.copy(self.selected_object)
                     self.current_tool.on_mouse_down(event.x, event.y, 
                         copied_object)
-            # Special case 2: selection tool
+        # Special case 2: selection tool
             # Actually this can totally be merged with case 1
             elif isinstance(self.current_tool, psm_selection_tool):
                 
@@ -2077,33 +2516,22 @@ class Presimation(Animation):
                 # We have to see which object the selection tool selects
                 count = len(self.working_slide.objects)
                 # Only one object can be selected with selection tool
-                selected_flag = False
-                selected_name = None
-                for temp in range(count):
-                    index = count - temp - 1
-                    obj = self.working_slide.objects[index]
+                self.deselect_all()
+                result = self.get_object(event.x, event.y)
 
-                    if not selected_flag and obj.in_borders(event.x, event.y):
-                        obj.on_mouse_down(event.x, event.y)
-                        # Grab the name and index
-                        selected_name = obj.get_value("NAME")
-                        selected_index = obj.get_value("INDEX")
-
-                        self.selected_object = obj
-                        selected_flag = True
-                    else:
-                        obj.set_selected(False)
-
-                if not selected_flag:
-                    # Switch back to default tool
-                    self.select_tool(None)
-                else:
+                if result != None:
+                    self.selected_object = result
+                    result.set_selected(True)
+                    result.on_mouse_down(event.x, event.y)
+                    selected_name = result.get_value("NAME")
+                    selected_index = result.get_value("INDEX")
                     self.current_tool.generate_object(object_name, 
-                        self.working_slide, 
-                        selected_name,
-                        selected_index)
-
-            # General case: drawing with a tool to create an object
+                                                      self.working_slide, 
+                                                      selected_name,
+                                                      selected_index)
+                else:
+                    self.select_tool(None)
+        # General case: drawing with a tool to create an object
             else:
                 # The general object names like "Circle" "Line" etc.
                 object_name = self.current_tool.get_object_name()
@@ -2119,6 +2547,34 @@ class Presimation(Animation):
         self.root.focus()
 
     def mouse_up(self, event):
+
+        if self.in_grab_mode:
+            # The reference string to a specific field of an object
+            reference = None
+            if self.temp_menu != None:
+                field = self.temp_menu.get_field(event.x, event.y)
+                if field != None:
+                    reference = field.get_reference()
+                self.temp_menu.hide_inputbox()
+            else:
+                # We are grabbing from the original menu itself
+                # TODO: Change menus[0] to sth else
+                field = self.menus[0].get_field(event.x, event.y)
+                if field != None:
+                    reference = field.name
+
+            if reference != None:
+                # We've grabbed a field!
+                self.grab_object.insert_expression_to_field(reference)
+            
+            self.in_grab_mode = False
+            self.grab_object.toggle_grab(False)
+            self.grab_object = None
+            self.temp_menu = None
+
+        for menu in self.menus:
+            menu.on_mouse_up(event.x, event.y)
+
         for GUI_object in self.GUI_objects:
             GUI_object.on_mouse_up(event.x, event.y)
         if self.current_tool == CLICK_SELECT:
@@ -2135,12 +2591,45 @@ class Presimation(Animation):
             if psm_tool.in_workspace(event.x, event.y):
                 self.current_tool = CLICK_SELECT
 
-    def mouse_move(self,event):
+    def mouse_move(self, event):
+        self.mouse_pos = (event.x, event.y)
+
+        for menu in self.menus:
+            menu.on_mouse_move(event.x, event.y)
+
+        # Grab mode:
+        if self.in_grab_mode:
+            if self.menus[0].in_borders(event.x, event.y):
+                # Mouse is on the original menu here
+                # Don't need to do anything
+                pass
+            elif (self.temp_menu != None 
+              and self.temp_menu.in_borders(event.x, event.y)):
+                # Mouse is on another object's menu which we have recorded
+                pass
+            else:
+                curr_obj = self.get_object(event.x, event.y)
+                if curr_obj == None:
+                    # We are not grabbing expression from any other objects
+                    if self.temp_menu != None:
+                        self.temp_menu.hide_inputbox()
+                    self.temp_menu = None
+                    self.temp_object = None
+                elif curr_obj == self.temp_object:
+                    pass
+                else:
+                    if self.temp_menu != None:
+                        self.temp_menu.hide_inputbox()
+                    # We are switching to a new object!
+                    self.temp_object = curr_obj
+                    self.temp_menu = curr_obj.menu
+
         # Selection tool
         if self.current_tool == CLICK_SELECT:
             for obj in self.working_slide.objects:
                 # Currently only one object can be selected at a time
                 if obj.is_selected:
+                    # Enable all the object handle buttons
                     obj.on_mouse_move(event.x, event.y)
         else:
             self.current_tool.on_mouse_move(event.x, event.y)
@@ -2165,18 +2654,30 @@ class Presimation(Animation):
             self.mouse_over_slide = -1
 
     def timer_fired(self):
+
+        for menu in self.menus:
+            menu.update()
+
         if self.is_initializing:
             self.init_GUI()
             self.is_initializing = False
         else:
-            self.update_snapshots()
             # Update all the buttons
             for GUI_object in self.GUI_objects:
                 GUI_object.update()
             if self.mode == "EDIT":
                 # We need the selected object in the working slide to update
                 # since double clicking toggles the menu
-                self.working_slide.update()
+                result = self.working_slide.update()
+                if result != None:
+                    # Something's happened!
+                    # In this case we are using the grab feature
+                    # Where we can take the handle of a object's field
+                    # and insert it into another object's field expression
+                    # if not self.in_grab_mode: 
+                        # print("Excited! Grab mode activated!")
+                    self.in_grab_mode = True
+                    self.grab_object = result
             elif self.mode == "PLAYBACK":
                 self.time += 1
                 self.time = self.time % self.get_playback_length()
@@ -2218,5 +2719,21 @@ class Presimation(Animation):
         # Draw snapshots
         for snapshot in self.snapshots:
             snapshot.draw(self.canvas)
+
+        # Draw menus
+        if self.mode == "EDIT": 
+            self.menus = self.working_slide.draw_menus(self.canvas)
+            if self.in_grab_mode:
+                if self.temp_menu != None and self.temp_object != None:
+                    # Draw the temp menu in grab mode
+                    menu_x, menu_y = self.temp_object.get_menu_position()
+                    self.temp_menu.draw(self.canvas, menu_x, menu_y)
+                # Draw the grabbing line
+                grab_start = self.grab_object.grab_start
+                menu_start = self.grab_object.get_menu_position()
+                startx = grab_start[0] + menu_start[0]
+                starty = grab_start[1] + menu_start[1]
+                self.canvas.create_line((startx, starty), 
+                                        self.mouse_pos, width = 5)
 
 psm = Presimation(SCREEN_WIDTH, SCREEN_HEIGHT)
