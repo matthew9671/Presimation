@@ -15,7 +15,8 @@ import os
 # endif
 
 # From-- *drum roll* STACKOVERFLOW!
-# http://stackoverflow.com/questions/4060221/how-to-reliably-open-a-file-in-the-same-directory-as-a-python-script
+# http://stackoverflow.com/questions/4060221/how-to-reliably-open-a-file-in-the-
+# same-directory-as-a-python-script
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
@@ -2458,7 +2459,8 @@ class Presimation(Animation):
             if self.current_tool == CLICK_SELECT:
                 self.current_tool = COPY_TOOL
         elif event.keysym.upper() == "R":
-            self.__init__(SCREEN_WIDTH, SCREEN_HEIGHT, run = False)
+            pass
+            #self.__init__(SCREEN_WIDTH, SCREEN_HEIGHT, run = False)
             #print("Pressed E")
 
     def key_released(self, event):
