@@ -66,7 +66,7 @@ For developers: note that this tool is a little tricky to implement since the st
 When the user switches between the interchangable fields, the handles on the objects should also change accordingly.
 ####Pointer tool
 Click on any existing object (including pointers) to create a pointer to that object. Pointers can be dereferenced by a Do Block called get object. The default setting to the Do Block is follow the pointers to the end until you get a non-pointer, but we can make this adjustable.
-Another Do Block that you use on the pointer all the time is increment/decrement. The pointer is on the entire series of objects, so incrementing it will cause it to go to the next object in the list. If there are no more objects it will either do nothing or go back to the first element by setting. __***Needs more thought***__
+Another Do Block that you use on the pointer all the time is increment/decrement. The pointer is on the entire series of objects, so incrementing it will cause it to go to the next object in the list. If there are no more objects it will either do nothing or go back to the first element by setting. (__***More thoughts needed***__)
 ####Group tool
 Drag-select (or circle-select) a group of objects to create a group object. 
 The group object has a lot of applications: 
@@ -77,9 +77,9 @@ A (more powerful but more confusing) alternative would be to have the value of e
 ####Marker tool
 Click in the workspace and create a marker object. If this object moves, it will leave a colored trail in its trajectory. Can be used to present parametric curves, etc.
 Best used in conjuction with the "Follow" block.
-####Camera tool __***More thoughts needed***__
+####Camera tool (__***More thoughts needed***__)
 This is still just an idea, but it would be cool if we enable users to make the presentation zoom in on some portion of the workspace (like Presi), or even create a split-screen effect.
-####Area tool __***More thoughts needed***__
+####Area tool (__***More thoughts needed***__)
 feature: make intersection/union of areas which can be filled and highlighted.
 Useful for presenting probability, set theory and many more!
 Note to developers: Algorithm might be non-trivial, and there probably are some algorithms out there that can realize this.
@@ -91,15 +91,15 @@ Drag from the grabber to a object in the workspace to create an object block.
 #### Field Blocks (green outline)
 With an object block in place, a field block can be choosen and added from the object's fields.
 #### Do Blocks (grey outline)
-Set to
-Object:Free([Field]) - Break the dependence of a field in an object (clear the expression in the field); if no field is provided, all field's dependence will be broken.
-Pointer: Increment() (Can set step and change to decrement in setting)
-Pointer: Get()
-Group: Shuffle(Field) - Shuffles a field in the group of objects
+* Set to(Object, field, value) - Set a field of an object to a value
+* Object:Free([Field]) - Break the dependence of a field in an object (clear the expression in the field); if no field is provided, all field's dependence will be broken.
+* Pointer: Increment() (Can set step and change to decrement in setting)
+* Pointer: Get()
+* Group: Shuffle(Field) - Shuffles a field in the group of objects
 Follow(Object, Object) - Makes the first object follow the second one. When the position of the second object changes, the position of the second object will change accordingly to make the relative position the same. Note that the position of the first object can be actively changed. 
-The function of this block can be realized in other ways, but we can have it for convience. This block will mostly be used for markers.
-Marker: Clear() - Clear the trajectories drawn by the marker.
-#### Flow Blocks (red outline) __***Needs more thought***__
+The function of this block can be realized in other ways, but we can have it for convenience. This block will mostly be used for markers.
+* Marker: Clear() - Clear the trajectories drawn by the marker.
+#### Flow Blocks (red outline) (__***More thoughts needed***__)
 If
 
 ## What are the users going to make?
