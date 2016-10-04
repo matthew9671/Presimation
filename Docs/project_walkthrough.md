@@ -109,20 +109,20 @@ If
 ## What are the users going to make?
 ###[Computer Science]Bubble Sort:
 1. Create a rectangle. Set the position representation to "left bottom height width" and set the height to "10 + index * 10" by grabbing or just typing the expression.
-2. Hold down the "d" key, click and drag to copy the rectangle n times[^1]. These rectangles will be the numbers to sort. Note that the height of each of the rectangles will be different because of the expression.
+2. Hold down the "d" key, click and drag to copy the rectangle n times [1]. These rectangles will be the numbers to sort. Note that the height of each of the rectangles will be different because of the expression.
 3. Select all the objects with Group Tool, double click on the group generated to expand its menu and click "align in line". Double click on the "align" icon to pop the hidden fields, and in it specify the spacing between objects.
 4. In the actions panel, grab the group object to create an Object Block. Create a shuffle do block and attach the "height" field to it. Click "apply", the height of all the rectangles should be randomized.
-5. With the pointer tool, double click on any of the rectangles to create a series of pointers that points to each one of the series of objects. [^2] These pointers represents the slots in the list that we are sorting.
-6. Create two more pointers that points to the first pointer in the series created in the previous step. These points to the low and high positions in our list. Grab the first pointer in the action panel and add an _Increment_ Do Block on it. Everytime we take a new snapshot the pointer will move forward. In the settings for the Do Block, set the _loop range_ from 0 to _count_-2.[^3] In the second pointer's menu set the _point to index_ field to that of the first pointer's +1. (This step is rather complicated, maybe we could do better without losing generality?)
+5. With the pointer tool, double click on any of the rectangles to create a series of pointers that points to each one of the series of objects. [2] These pointers represents the slots in the list that we are sorting.
+6. Create two more pointers that points to the first pointer in the series created in the previous step. These points to the low and high positions in our list. Grab the first pointer in the action panel and add an _Increment_ Do Block on it. Everytime we take a new snapshot the pointer will move forward. In the settings for the Do Block, set the _loop range_ from 0 to _count_-2.[3] In the second pointer's menu set the _point to index_ field to that of the first pointer's +1. (This step is rather complicated, maybe we could do better without losing generality?)
 7. Finally at the last step! Create an _if_ Flow Block, and in the condition choose ">". For the first argument select the "low" pointer, choose the _Get_ Do Block to get the rectangle that the pointer that the pointer is pointing to is pointing to (lol) and choose the _height_ Field Block. Do the same thing for the "high" pointer in the second argument. The condition is satisfied when the first number is greater than the second number, and now we would like to swap them. In the body of the if block, build the expression: 
-----
+~~~~
 swap(low.get(), high.get(), "left")
 swap(low, high, index)
-----
+~~~~
 
-And we're done! Just take a bunch of snapshots and watch the list sort itself![^4]
+And we're done! Just take a bunch of snapshots and watch the list sort itself![4]
 
-[^1] This is what I used in the demo. In the final product we might consider a do block that when applied to an object generate n copies of that object. 
-[^2] This is a big improvement from the demo as you have to set up the pointers manually.
-[^3] By default this is set to __count__-1 so when the pointer reaches to the end of the list it returns to the first one.
-[^4] Note that the shuffle action is by default one-time, so when you create a new snapshot it will just go away. The other actions stay and are repeated everytime a new snapshot is taken.
+[1]: This is what I used in the demo. In the final product we might consider a do block that when applied to an object generate n copies of that object.
+[2]: This is a big improvement from the demo as you have to set up the pointers manually.
+[3]: By default this is set to _count_-1 so when the pointer reaches to the end of the list it returns to the first one.
+[4]: Note that the shuffle action is by default one-time, so when you create a new snapshot it will just go away. The other actions stay and are repeated everytime a new snapshot is taken.
