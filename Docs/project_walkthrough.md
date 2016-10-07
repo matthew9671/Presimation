@@ -55,15 +55,19 @@ One of the drawbacks in the Presimation Demo is that programming is still heavil
 Note that after the action is applied, the slide is static and animation works just like if there were no programming involved. For example when you are building bubble sort, just create the objects and actions in the working slide, then repeatedly take snapshots (save frames) until the animation is complete.
 
 ###Objects/Tools:
-####Circle tool:
+####Circle tool
 Drag and draw a circle on the workspace. The drag starting point is the center of the circle.
-####Rect tool:
+####Rect tool
 Drag and draw a rectangle on the workspace. The positions of the rectangle is represented by a interchangable field:
 1. Top left corner position & bottom right corner position
 2. Center position & width and height
 3. Left, bottom, width and height
 For developers: note that this tool is a little tricky to implement since the status (bl, br, tl, tr) of each corner could change when the user manipulates the rectangle.
 When the user switches between the interchangable fields, the handles on the objects should also change accordingly.
+####Vector tool
+Interchangable field:
+1. Cartesian coordinate representation
+2. Polar coordinate representation
 ####Pointer tool
 Click on any existing object (including pointers) to create a pointer to that object. Pointers can be dereferenced by a Do Block called get object. The default setting to the Do Block is follow the pointers to the end until you get a non-pointer, but we can make this adjustable.
 Another Do Block that you use on the pointer all the time is increment/decrement. The pointer is on the entire series of objects, so incrementing it will cause it to go to the next object in the list. If there are no more objects it will either do nothing or go back to the first element by setting. (__***More thoughts needed***__)
@@ -79,6 +83,7 @@ Click in the workspace and create a marker object. If this object moves, it will
 Best used in conjuction with the "Follow" block.
 ####Camera tool (__***More thoughts needed***__)
 This is still just an idea, but it would be cool if we enable users to make the presentation zoom in on some portion of the workspace (like Presi), or even create a split-screen effect.
+Also, we can give the camera tool an ability to freeze time so that the user can zoom in on a freeze frame and talk about some details.
 ####Area tool (__***More thoughts needed***__)
 feature: make intersection/union of areas which can be filled and highlighted.
 Useful for presenting probability, set theory and many more!
@@ -96,10 +101,11 @@ With an object block in place, a field block can be choosen and added from the o
 * Object: Free([Field]) - Break the dependence of a field in any object (clear the expression in the field); if no field is provided, all field's dependence will be broken.
 * Swap(Object, Object, field) - Swap the values of fields of two objects.
 * Object: Count() - Return the number of objects in the series of objects.
+* Object: Move(vectorobject) - Move the object in the direction of the vector.
 * Pointer: Increment() (Can set step and change to decrement in setting)
 * Pointer: Get()
 * Group: Shuffle(Field) - Shuffles a field in the group of objects
-Follow(Object, Object) - Makes the first object follow the second one. When the position of the second object changes, the position of the second object will change accordingly to make the relative position the same. Note that the position of the first object can be actively changed. 
+* Follow(Object, Object) - Makes the first object follow the second one. When the position of the second object changes, the position of the second object will change accordingly to make the relative position the same. Note that the position of the first object can be actively changed. 
 The function of this block can be realized in other ways, but we can have it for convenience. This block will mostly be used for markers.
 * Marker: Clear() - Clear the trajectories drawn by the marker.
 
@@ -112,17 +118,34 @@ If
 2. Hold down the "d" key, click and drag to copy the rectangle n times [1]. These rectangles will be the numbers to sort. Note that the height of each of the rectangles will be different because of the expression.
 3. Select all the objects with Group Tool, double click on the group generated to expand its menu and click "align in line". Double click on the "align" icon to pop the hidden fields, and in it specify the spacing between objects.
 4. In the actions panel, grab the group object to create an Object Block. Create a shuffle do block and attach the "height" field to it. Click "apply", the height of all the rectangles should be randomized.
-5. With the pointer tool, double click on any of the rectangles to create a series of pointers that points to each one of the series of objects. [2] These pointers represents the slots in the list that we are sorting.
-6. Create two more pointers that points to the first pointer in the series created in the previous step. These points to the low and high positions in our list. Grab the first pointer in the action panel and add an _Increment_ Do Block on it. Everytime we take a new snapshot the pointer will move forward. In the settings for the Do Block, set the _loop range_ from 0 to _count_-2.[3] In the second pointer's menu set the _point to index_ field to that of the first pointer's +1. (This step is rather complicated, maybe we could do better without losing generality?)
+5. With the pointer tool, double click on any of the rectangles to create a series of pointers that points to each one of the series of objects. [2] These pointers represents the slots in the list that we are sorting. [3]
+6. Create two more pointers that points to the first pointer in the series created in the previous step. These points to the low and high positions in our list. Grab the first pointer in the action panel and add an _Increment_ Do Block on it. Everytime we take a new snapshot the pointer will move forward. In the settings for the Do Block, set the _loop range_ from 0 to _count_-2.[4] In the second pointer's menu set the _point to index_ field to that of the first pointer's +1. (This step is rather complicated, maybe we could do better without losing generality?)
 7. Finally at the last step! Create an _if_ Flow Block, and in the condition choose ">". For the first argument select the "low" pointer, choose the _Get_ Do Block to get the rectangle that the pointer that the pointer is pointing to is pointing to (lol) and choose the _height_ Field Block. Do the same thing for the "high" pointer in the second argument. The condition is satisfied when the first number is greater than the second number, and now we would like to swap them. In the body of the if block, build the expression: 
 ~~~~
 swap(low.get(), high.get(), "left")
 swap(low, high, index)
 ~~~~
 
-And we're done! Just take a bunch of snapshots and watch the list sort itself![4]
+And we're done! Just take a bunch of snapshots and watch the list sort itself![5]
 
 [1]: This is what I used in the demo. In the final product we might consider a do block that when applied to an object generate n copies of that object.
+
 [2]: This is a big improvement from the demo as you have to set up the pointers manually.
-[3]: By default this is set to _count_-1 so when the pointer reaches to the end of the list it returns to the first one.
-[4]: Note that the shuffle action is by default one-time, so when you create a new snapshot it will just go away. The other actions stay and are repeated everytime a new snapshot is taken.
+
+[3]: Idea: get rid of this nested pointer nonsense and just enable the swap() function to also swap the index (and identity). This would lead to a major change in our concept though.
+
+[4]: By default this is set to _count_-1 so when the pointer reaches to the end of the list it returns to the first one.
+
+[5]: Note that the shuffle action is by default one-time, so when you create a new snapshot it will just go away. The other actions stay and are repeated everytime a new snapshot is taken.
+
+###[Physics]Projectile trajectory:
+1. Draw a circle [1] as our projectile.
+2. Create a vector object, in its angle-length representation set the length to a fixed number. This will be the initial velocity of the projectile. Set the angle to be some constant times the index. In this way, when we copy the vector each would be at a different angle.
+3. Create a marker object, move it to the center of the circle, in the color tab, choose the hue-saturation-brightness representation, set the hue to be some constant times the index. In this way, when we copy the marker it will have a different color.
+4. Now we have to take care of the movement. In the action panel, set the marker to follow the circle (follow), set the circle to move according to the vector (move), and set the vector's x component to drop overtime. Notice these actions are _discrete time actions_[2], meaning the values will reset every frame in the animation, as opposed to being interpolated between the two end points.
+5. With the group tool, select the circle, marker and vector objects and make n copies. Note that when the objects have some dependencies within the group, the new objects depend on the copy of the original depended object (kind of like excel auto fill really).
+6. Make a bunch of slides and we can see a bunch of projectiles shooting out with different colored parabolic trajectories! In the attributes of the vectors, we can set them to be visible or invisible in the final animation. If we want to show the horizontal projection of the tracjectories, simple set the y coordinates of the markers to a constant AFTER the follow action.
+
+[1]: When we have the free drawing tools we can have the user draw missiles, and have the missiles rotate to point to the direction they are traveling.
+
+[2]: There are 3 types of actions: One time (shuffle), continuous (follow) and discrete (increment pointer). Sometimes there is a setting that allows you to switch between the types.
